@@ -13,6 +13,7 @@ const rateLimit = require('express-rate-limit');
 const { Server } = require('socket.io');
 const http = require('http');
 const path = require('path');
+const jwt = require('jsonwebtoken');
 
 // Import database connections
 const { connectPostgreSQL } = require('./database/postgresql');
