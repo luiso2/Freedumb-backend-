@@ -1,0 +1,823 @@
+openapi: 3.0.3
+info:
+  title: FREEDUMB API
+  description: |
+    ## AI-Powered Personal Finance Management API
+
+    FREEDUMB is a comprehensive financial management system with AI integration powered by OpenAI GPT-4.
+
+    ### Key Features:
+    - 🤖 Natural Language Processing for transaction entry
+    - 💰 Automated categorization and insights
+    - 📊 Real-time financial analytics
+    - 🎯 Budget tracking and goals
+    - 📈 Investment portfolio management
+    - 🔔 Smart notifications
+    - 📱 Multi-platform support
+
+    ### Authentication:
+    All endpoints except `/auth/*` require JWT Bearer token authentication.
+
+    ### Rate Limits:
+    - Standard endpoints: 100 requests/minute
+    - AI endpoints: 20 requests/minute
+    - Auth endpoints: 5 requests/15 minutes
+
+    ### ChatGPT Integration:
+    This API integrates with OpenAI's GPT-4 for intelligent financial assistance.
+    Contact admin for API key access.
+  version: 1.0.0
+  termsOfService: https://freedumb.ai/terms
+  contact:
+    name: FREEDUMB Support
+    email: support@freedumb.ai
+    url: https://freedumb.ai/support
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3000/api
+    description: Development server
+  - url: https://api.freedumb.ai/api
+    description: Production server
+  - url: https://staging-api.freedumb.ai/api
+    description: Staging server
+
+tags:
+  - name: Authentication
+    description: User authentication and authorization
+  - name: Transactions
+    description: Financial transaction management
+  - name: AI Assistant
+    description: ChatGPT-powered financial assistant
+  - name: Budgets
+    description: Budget management and tracking
+  - name: Investments
+    description: Investment portfolio management
+  - name: Analytics
+    description: Financial analytics and reports
+  - name: Users
+    description: User profile management
+  - name: Notifications
+    description: Notification preferences and history
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        phone:
+          type: string
+        premium:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        settings:
+          $ref: '#/components/schemas/UserSettings'
+
+    UserSettings:
+      type: object
+      properties:
+        currency:
+          type: string
+          default: USD
+        timezone:
+          type: string
+          default: America/New_York
+        language:
+          type: string
+          default: en
+        darkMode:
+          type: boolean
+          default: false
+        notifications:
+          type: object
+          properties:
+            email:
+              type: boolean
+            push:
+              type: boolean
+            sms:
+              type: boolean
+
+    Transaction:
+      type: object
+      required:
+        - amount
+        - type
+        - date
+      properties:
+        id:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: float
+        type:
+          type: string
+          enum: [income, expense]
+        category:
+          type: string
+        subCategory:
+          type: string
+        description:
+          type: string
+        merchant:
+          type: string
+        paymentMethod:
+          type: string
+          enum: [cash, credit_card, debit_card, bank_transfer, paypal, venmo, zelle, check, crypto, other]
+        cardName:
+          type: string
+        businessType:
+          type: string
+          enum: [personal, business]
+        businessName:
+          type: string
+        isTaxDeductible:
+          type: boolean
+        tags:
+          type: array
+          items:
+            type: string
+        date:
+          type: string
+          format: date
+        recurring:
+          type: boolean
+        attachments:
+          type: array
+          items:
+            type: string
+            format: uri
+        location:
+          type: object
+          properties:
+            latitude:
+              type: number
+            longitude:
+              type: number
+            address:
+              type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    NLPTransactionRequest:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: string
+          example: "I spent $45.50 on Uber to the airport yesterday with my Chase Sapphire card"
+        context:
+          type: object
+          properties:
+            timezone:
+              type: string
+            defaultPaymentMethod:
+              type: string
+            defaultBusinessType:
+              type: string
+
+    Budget:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        category:
+          type: string
+        amount:
+          type: number
+        period:
+          type: string
+          enum: [daily, weekly, monthly, yearly]
+        spent:
+          type: number
+        remaining:
+          type: number
+        percentage:
+          type: number
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        alerts:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            thresholds:
+              type: array
+              items:
+                type: number
+
+    Investment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        symbol:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [stock, bond, etf, mutual_fund, crypto, real_estate, other]
+        quantity:
+          type: number
+        purchasePrice:
+          type: number
+        currentPrice:
+          type: number
+        purchaseDate:
+          type: string
+          format: date
+        value:
+          type: number
+        gain:
+          type: number
+        gainPercentage:
+          type: number
+
+    AIChat:
+      type: object
+      properties:
+        message:
+          type: string
+        context:
+          type: array
+          items:
+            type: object
+            properties:
+              role:
+                type: string
+                enum: [user, assistant]
+              content:
+                type: string
+        includeFinancialContext:
+          type: boolean
+          default: true
+
+    FinancialInsights:
+      type: object
+      properties:
+        summary:
+          type: object
+          properties:
+            totalIncome:
+              type: number
+            totalExpenses:
+              type: number
+            netWorth:
+              type: number
+            savingsRate:
+              type: number
+        insights:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: [spending, saving, investment, warning, opportunity, tax]
+              title:
+                type: string
+              description:
+                type: string
+              priority:
+                type: string
+                enum: [low, medium, high, critical]
+              actionable:
+                type: boolean
+              suggestedAction:
+                type: string
+        predictions:
+          type: object
+          properties:
+            nextMonthExpenses:
+              type: number
+            nextMonthIncome:
+              type: number
+            yearEndBalance:
+              type: number
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register new user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - name
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                name:
+                  type: string
+                phone:
+                  type: string
+      responses:
+        201:
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+                  token:
+                    type: string
+                  refreshToken:
+                    type: string
+        400:
+          description: Validation error
+        409:
+          description: User already exists
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        200:
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+                  token:
+                    type: string
+                  refreshToken:
+                    type: string
+        401:
+          description: Invalid credentials
+
+  /auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Refresh access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        200:
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  refreshToken:
+                    type: string
+
+  /transactions:
+    get:
+      tags:
+        - Transactions
+      summary: Get all transactions
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [income, expense]
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: businessType
+          in: query
+          schema:
+            type: string
+            enum: [personal, business]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        200:
+          description: List of transactions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transactions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Transaction'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      pages:
+                        type: integer
+
+    post:
+      tags:
+        - Transactions
+      summary: Create transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Transaction'
+      responses:
+        201:
+          description: Transaction created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+
+  /transactions/nlp:
+    post:
+      tags:
+        - Transactions
+        - AI Assistant
+      summary: Create transaction from natural language
+      description: Uses ChatGPT to parse natural language input into structured transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NLPTransactionRequest'
+      responses:
+        201:
+          description: Transaction created from NLP
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transaction:
+                    $ref: '#/components/schemas/Transaction'
+                  parsed:
+                    type: object
+                    properties:
+                      confidence:
+                        type: number
+                      originalInput:
+                        type: string
+
+  /ai/chat:
+    post:
+      tags:
+        - AI Assistant
+      summary: Chat with AI financial assistant
+      description: Powered by ChatGPT for intelligent financial advice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIChat'
+      responses:
+        200:
+          description: AI response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  response:
+                    type: string
+                  suggestions:
+                    type: array
+                    items:
+                      type: string
+                  context:
+                    type: object
+
+  /ai/categorize:
+    post:
+      tags:
+        - AI Assistant
+      summary: Auto-categorize transaction
+      description: Uses AI to automatically categorize transactions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description:
+                  type: string
+                merchant:
+                  type: string
+                amount:
+                  type: number
+      responses:
+        200:
+          description: Categorization result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  category:
+                    type: string
+                  subCategory:
+                    type: string
+                  confidence:
+                    type: number
+                  isTaxDeductible:
+                    type: boolean
+
+  /ai/insights:
+    get:
+      tags:
+        - AI Assistant
+        - Analytics
+      summary: Get AI-generated financial insights
+      description: ChatGPT analyzes your finances and provides personalized insights
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [week, month, quarter, year]
+      responses:
+        200:
+          description: Financial insights
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialInsights'
+
+  /ai/budget-recommendations:
+    post:
+      tags:
+        - AI Assistant
+        - Budgets
+      summary: Get AI budget recommendations
+      description: ChatGPT creates personalized budget based on spending patterns
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                monthlyIncome:
+                  type: number
+                savingsGoal:
+                  type: number
+                priorities:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        200:
+          description: Budget recommendations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recommendations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Budget'
+                  explanation:
+                    type: string
+                  savingsPotential:
+                    type: number
+
+  /budgets:
+    get:
+      tags:
+        - Budgets
+      summary: Get all budgets
+      responses:
+        200:
+          description: List of budgets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Budget'
+
+    post:
+      tags:
+        - Budgets
+      summary: Create budget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Budget'
+      responses:
+        201:
+          description: Budget created
+
+  /investments:
+    get:
+      tags:
+        - Investments
+      summary: Get investment portfolio
+      responses:
+        200:
+          description: Investment portfolio
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  investments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Investment'
+                  summary:
+                    type: object
+                    properties:
+                      totalValue:
+                        type: number
+                      totalGain:
+                        type: number
+                      totalGainPercentage:
+                        type: number
+
+  /analytics/summary:
+    get:
+      tags:
+        - Analytics
+      summary: Get financial summary
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month, quarter, year]
+      responses:
+        200:
+          description: Financial summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  income:
+                    type: number
+                  expenses:
+                    type: number
+                  savings:
+                    type: number
+                  netWorth:
+                    type: number
+                  topCategories:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        category:
+                          type: string
+                        amount:
+                          type: number
+                        percentage:
+                          type: number
+
+# API Key for OpenAI Integration
+x-api-key-info:
+  description: |
+    ## OpenAI API Key Configuration
+
+    To use the AI features of this API, you need to configure an OpenAI API key:
+
+    ### Development API Key (Limited):
+    ```
+    OPENAI_API_KEY=sk-proj-demo-key-limited-usage
+    ```
+
+    ### Production API Key:
+    Contact the administrator to obtain a production API key with higher limits.
+
+    ### Configuration:
+    Set the API key in your `.env` file or environment variables:
+    ```
+    OPENAI_API_KEY=your-api-key-here
+    OPENAI_MODEL=gpt-4-turbo-preview
+    OPENAI_MAX_TOKENS=2000
+    OPENAI_TEMPERATURE=0.7
+    ```
+
+    ### Rate Limits:
+    - Development: 20 requests/minute
+    - Production: 100 requests/minute
+    - Enterprise: Custom limits
+
+    ### Billing:
+    OpenAI usage is billed separately. Monitor your usage at:
+    https://platform.openai.com/usage
