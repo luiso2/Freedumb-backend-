@@ -1,30 +1,21 @@
 const express = require('express');
 
 const router = express.Router();
+const budgetController = require('../controllers/budget.controller');
 
 // Get all budgets
-router.get('/', async (req, res) => {
-  res.json([]);
-});
+router.get('/', budgetController.getBudgets);
 
 // Create budget
-router.post('/', async (req, res) => {
-  const budget = {
-    id: Date.now().toString(),
-    ...req.body,
-    createdAt: new Date().toISOString()
-  };
-  res.status(201).json(budget);
-});
+router.post('/', budgetController.createBudget);
+
+// Get budget by ID
+router.get('/:id', budgetController.getBudgetById);
 
 // Update budget
-router.put('/:id', async (req, res) => {
-  res.json({ message: `Updated budget ${req.params.id}` });
-});
+router.put('/:id', budgetController.updateBudget);
 
 // Delete budget
-router.delete('/:id', async (req, res) => {
-  res.status(204).send();
-});
+router.delete('/:id', budgetController.deleteBudget);
 
 module.exports = router;

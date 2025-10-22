@@ -1,21 +1,15 @@
 const express = require('express');
 
 const router = express.Router();
+const userController = require('../controllers/user.controller');
 
-router.get('/profile', async (req, res) => {
-  res.json({
-    id: req.userId,
-    email: 'user@example.com',
-    name: 'Test User'
-  });
-});
+// Get user profile
+router.get('/profile', userController.getProfile);
 
-router.put('/profile', async (req, res) => {
-  res.json({ message: 'Profile updated' });
-});
+// Update user profile
+router.put('/profile', userController.updateProfile);
 
-router.delete('/account', async (req, res) => {
-  res.status(204).send();
-});
+// Delete user account
+router.delete('/account', userController.deleteAccount);
 
 module.exports = router;

@@ -1,23 +1,15 @@
 const express = require('express');
 
 const router = express.Router();
+const analyticsController = require('../controllers/analytics.controller');
 
-router.get('/summary', async (req, res) => {
-  res.json({
-    income: 0,
-    expenses: 0,
-    savings: 0,
-    netWorth: 0,
-    topCategories: []
-  });
-});
+// Get financial summary
+router.get('/summary', analyticsController.getSummary);
 
-router.get('/cashflow', async (req, res) => {
-  res.json({ cashflow: [] });
-});
+// Get cashflow analysis
+router.get('/cashflow', analyticsController.getCashflow);
 
-router.get('/predictions', async (req, res) => {
-  res.json({ predictions: [] });
-});
+// Get predictions
+router.get('/predictions', analyticsController.getPredictions);
 
 module.exports = router;

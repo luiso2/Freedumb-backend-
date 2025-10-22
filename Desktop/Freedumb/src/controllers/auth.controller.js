@@ -1,9 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const logger = require('../utils/logger');
-
-// Mock user storage (replace with database in production)
-const users = [];
+const { getModels } = require('../models');
 
 const generateToken = userId => jwt.sign(
   { userId },
@@ -20,9 +18,10 @@ const generateRefreshToken = userId => jwt.sign(
 const register = async (req, res) => {
   try {
     const { email, password, name } = req.body;
+    const { User } = getModels();
 
     // Check if user exists
-    const existingUser = users.find(u => u.email === email);
+    const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
       return res.status(409).json({ error: 'User already exists' });
     }
@@ -31,25 +30,32 @@ const register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // Create user
-    const user = {
-      id: Date.now().toString(),
+    const user = await User.create({
       email,
       password: hashedPassword,
-      name,
-      createdAt: new Date().toISOString()
-    };
+      name
+    });
 
-    users.push(user);
+    // Update last login
+    await user.update({ lastLogin: new Date() });
 
     // Generate tokens
     const token = generateToken(user.id);
     const refreshToken = generateRefreshToken(user.id);
 
     // Remove password from response
-    const { password: _password, ...userWithoutPassword } = user;
+    const userResponse = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      monthlyIncome: user.monthlyIncome,
+      savingsGoal: user.savingsGoal,
+      riskTolerance: user.riskTolerance,
+      createdAt: user.createdAt
+    };
 
     res.status(201).json({
-      user: userWithoutPassword,
+      user: userResponse,
       token,
       refreshToken
     });
@@ -62,9 +68,10 @@ const register = async (req, res) => {
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    const { User } = getModels();
 
     // Find user
-    const user = users.find(u => u.email === email);
+    const user = await User.findOne({ where: { email, isActive: true } });
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -75,15 +82,27 @@ const login = async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Update last login
+    await user.update({ lastLogin: new Date() });
+
     // Generate tokens
     const token = generateToken(user.id);
     const refreshToken = generateRefreshToken(user.id);
 
     // Remove password from response
-    const { password: _password2, ...userWithoutPassword } = user;
+    const userResponse = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      monthlyIncome: user.monthlyIncome,
+      savingsGoal: user.savingsGoal,
+      riskTolerance: user.riskTolerance,
+      lastLogin: user.lastLogin,
+      createdAt: user.createdAt
+    };
 
     res.json({
-      user: userWithoutPassword,
+      user: userResponse,
       token,
       refreshToken
     });
@@ -96,12 +115,22 @@ const login = async (req, res) => {
 const refreshToken = async (req, res) => {
   try {
     const { refreshToken: userRefreshToken } = req.body;
+    const { User } = getModels();
 
     // Verify refresh token
     const decoded = jwt.verify(
       userRefreshToken,
       process.env.JWT_REFRESH_SECRET || 'default-refresh-secret'
     );
+
+    // Verify user still exists and is active
+    const user = await User.findOne({
+      where: { id: decoded.userId, isActive: true }
+    });
+
+    if (!user) {
+      return res.status(401).json({ error: 'User not found or inactive' });
+    }
 
     // Generate new tokens
     const token = generateToken(decoded.userId);
@@ -118,7 +147,8 @@ const refreshToken = async (req, res) => {
 };
 
 const logout = async (req, res) => {
-  // In a real app, you would invalidate the token here
+  // In a production app, you would invalidate the token in Redis here
+  // For now, just send success response (token will expire naturally)
   res.json({ message: 'Logged out successfully' });
 };
 
