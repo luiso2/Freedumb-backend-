@@ -5,21 +5,17 @@ const logger = require('../utils/logger');
 // Mock user storage (replace with database in production)
 const users = [];
 
-const generateToken = (userId) => {
-  return jwt.sign(
-    { userId },
-    process.env.JWT_SECRET || 'default-secret-key',
-    { expiresIn: process.env.JWT_EXPIRE || '15m' }
-  );
-};
+const generateToken = userId => jwt.sign(
+  { userId },
+  process.env.JWT_SECRET || 'default-secret-key',
+  { expiresIn: process.env.JWT_EXPIRE || '15m' }
+);
 
-const generateRefreshToken = (userId) => {
-  return jwt.sign(
-    { userId },
-    process.env.JWT_REFRESH_SECRET || 'default-refresh-secret',
-    { expiresIn: process.env.JWT_REFRESH_EXPIRE || '7d' }
-  );
-};
+const generateRefreshToken = userId => jwt.sign(
+  { userId },
+  process.env.JWT_REFRESH_SECRET || 'default-refresh-secret',
+  { expiresIn: process.env.JWT_REFRESH_EXPIRE || '7d' }
+);
 
 const register = async (req, res) => {
   try {
@@ -50,7 +46,7 @@ const register = async (req, res) => {
     const refreshToken = generateRefreshToken(user.id);
 
     // Remove password from response
-    const { password: _, ...userWithoutPassword } = user;
+    const { password: _password, ...userWithoutPassword } = user;
 
     res.status(201).json({
       user: userWithoutPassword,
@@ -84,7 +80,7 @@ const login = async (req, res) => {
     const refreshToken = generateRefreshToken(user.id);
 
     // Remove password from response
-    const { password: _, ...userWithoutPassword } = user;
+    const { password: _password2, ...userWithoutPassword } = user;
 
     res.json({
       user: userWithoutPassword,
@@ -99,11 +95,11 @@ const login = async (req, res) => {
 
 const refreshToken = async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    const { refreshToken: userRefreshToken } = req.body;
 
     // Verify refresh token
     const decoded = jwt.verify(
-      refreshToken,
+      userRefreshToken,
       process.env.JWT_REFRESH_SECRET || 'default-refresh-secret'
     );
 

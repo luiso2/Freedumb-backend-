@@ -1,8 +1,9 @@
 const express = require('express');
+
 const router = express.Router();
 
 router.get('/', async (req, res) => {
-  res.json({ investments: [], summary: { totalValue: 0, totalGain: 0, totalGainPercentage: 0 }});
+  res.json({ investments: [], summary: { totalValue: 0, totalGain: 0, totalGainPercentage: 0 } });
 });
 
 router.post('/', async (req, res) => {
