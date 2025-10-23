@@ -19,6 +19,7 @@ const jwt = require('jsonwebtoken');
 const { connectPostgreSQL } = require('./database/postgresql');
 const { connectRedis } = require('./database/redis');
 const { connectMongoDB } = require('./database/mongodb');
+const { initModels } = require('./models');
 
 // Import routes
 const authRoutes = require('./routes/auth.routes');
@@ -174,6 +175,10 @@ async function startServer() {
     // Connect to databases
     await connectPostgreSQL();
     logger.info('✅ PostgreSQL connected');
+
+    // Initialize models after PostgreSQL connection
+    initModels();
+    logger.info('✅ Database models initialized');
 
     await connectRedis();
     logger.info('✅ Redis connected');

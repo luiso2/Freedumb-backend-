@@ -1,4 +1,5 @@
 const express = require('express');
+
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const authController = require('../controllers/auth.controller');
@@ -13,7 +14,8 @@ const validateRequest = (req, res, next) => {
 };
 
 // Register route
-router.post('/register',
+router.post(
+  '/register',
   [
     body('email').isEmail().normalizeEmail(),
     body('password').isLength({ min: 8 }),
@@ -24,7 +26,8 @@ router.post('/register',
 );
 
 // Login route
-router.post('/login',
+router.post(
+  '/login',
   [
     body('email').isEmail().normalizeEmail(),
     body('password').notEmpty()
@@ -34,7 +37,8 @@ router.post('/login',
 );
 
 // Refresh token route
-router.post('/refresh',
+router.post(
+  '/refresh',
   body('refreshToken').notEmpty(),
   validateRequest,
   authController.refreshToken

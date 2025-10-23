@@ -14,7 +14,7 @@ class OpenAIService {
     });
 
     this.model = process.env.OPENAI_MODEL || 'gpt-4-turbo-preview';
-    this.maxTokens = parseInt(process.env.OPENAI_MAX_TOKENS) || 2000;
+    this.maxTokens = parseInt(process.env.OPENAI_MAX_TOKENS, 10) || 2000;
     this.temperature = parseFloat(process.env.OPENAI_TEMPERATURE) || 0.7;
   }
 
@@ -52,7 +52,7 @@ class OpenAIService {
         ],
         temperature: 0.3, // Lower temperature for more consistent parsing
         max_tokens: 500,
-        response_format: { type: "json_object" }
+        response_format: { type: 'json_object' }
       });
 
       const parsed = JSON.parse(response.choices[0].message.content);
@@ -100,13 +100,14 @@ class OpenAIService {
         messages: [
           {
             role: 'system',
-            content: 'You are an expert financial advisor AI. Provide actionable, specific financial advice based on data.'
+            content: 'You are an expert financial advisor AI. Provide actionable, '
+              + 'specific financial advice based on data.'
           },
           { role: 'user', content: prompt }
         ],
         temperature: this.temperature,
         max_tokens: this.maxTokens,
-        response_format: { type: "json_object" }
+        response_format: { type: 'json_object' }
       });
 
       const insights = JSON.parse(response.choices[0].message.content);
@@ -164,7 +165,7 @@ class OpenAIService {
         ],
         temperature: 0.2,
         max_tokens: 200,
-        response_format: { type: "json_object" }
+        response_format: { type: 'json_object' }
       });
 
       return JSON.parse(response.choices[0].message.content);
@@ -259,7 +260,7 @@ class OpenAIService {
         ],
         temperature: 0.5,
         max_tokens: 800,
-        response_format: { type: "json_object" }
+        response_format: { type: 'json_object' }
       });
 
       return JSON.parse(response.choices[0].message.content);
@@ -308,7 +309,7 @@ class OpenAIService {
         ],
         temperature: 0.4,
         max_tokens: 600,
-        response_format: { type: "json_object" }
+        response_format: { type: 'json_object' }
       });
 
       const result = JSON.parse(response.choices[0].message.content);
@@ -360,7 +361,7 @@ class OpenAIService {
         ],
         temperature: 0.3,
         max_tokens: 800,
-        response_format: { type: "json_object" }
+        response_format: { type: 'json_object' }
       });
 
       return JSON.parse(response.choices[0].message.content);
@@ -418,7 +419,7 @@ class OpenAIService {
       }
 
       spending[t.category].total += t.amount;
-      spending[t.category].count++;
+      spending[t.category].count += 1;
       spending[t.category].transactions.push(t);
     });
 
@@ -448,7 +449,7 @@ class OpenAIService {
       } else {
         monthlyData[month].expenses += t.amount;
       }
-      monthlyData[month].transactions++;
+      monthlyData[month].transactions += 1;
     });
 
     return Object.entries(monthlyData)

@@ -1,5 +1,4 @@
 const Redis = require('ioredis');
-const logger = require('../utils/logger');
 
 let redisClient;
 
@@ -10,7 +9,7 @@ const connectRedis = async () => {
       port: process.env.REDIS_PORT || 6379,
       password: process.env.REDIS_PASSWORD || undefined,
       db: process.env.REDIS_DB || 0,
-      retryStrategy: (times) => {
+      retryStrategy: times => {
         const delay = Math.min(times * 50, 2000);
         return delay;
       },
@@ -21,7 +20,7 @@ const connectRedis = async () => {
       console.log('Redis connection established');
     });
 
-    redisClient.on('error', (err) => {
+    redisClient.on('error', err => {
       console.error('Redis connection error:', err.message);
     });
 

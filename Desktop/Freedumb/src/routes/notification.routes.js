@@ -1,16 +1,21 @@
 const express = require('express');
+
 const router = express.Router();
+const notificationController = require('../controllers/notification.controller');
 
-router.get('/', async (req, res) => {
-  res.json({ notifications: [] });
-});
+// Get all notifications
+router.get('/', notificationController.getNotifications);
 
-router.put('/:id/read', async (req, res) => {
-  res.json({ message: 'Notification marked as read' });
-});
+// Mark all notifications as read
+router.put('/read-all', notificationController.markAllAsRead);
 
-router.delete('/:id', async (req, res) => {
-  res.status(204).send();
-});
+// Get notification by ID
+router.get('/:id', notificationController.getNotificationById);
+
+// Mark notification as read
+router.put('/:id/read', notificationController.markAsRead);
+
+// Delete notification
+router.delete('/:id', notificationController.deleteNotification);
 
 module.exports = router;
