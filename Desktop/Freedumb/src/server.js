@@ -30,6 +30,7 @@ const analyticsRoutes = require('./routes/analytics.routes');
 const aiRoutes = require('./routes/ai.routes');
 const userRoutes = require('./routes/user.routes');
 const notificationRoutes = require('./routes/notification.routes');
+const widgetRoutes = require('./routes/widget.routes');
 
 // Import middleware
 const { errorHandler } = require('./middleware/errorHandler');
@@ -124,6 +125,7 @@ app.use('/api/investments', authenticate, investmentRoutes);
 app.use('/api/analytics', authenticate, analyticsRoutes);
 app.use('/api/ai', authenticate, aiRoutes);
 app.use('/api/notifications', authenticate, notificationRoutes);
+app.use('/api/widget', authenticate, widgetRoutes);
 
 // WebSocket connection handling
 io.on('connection', (socket) => {
