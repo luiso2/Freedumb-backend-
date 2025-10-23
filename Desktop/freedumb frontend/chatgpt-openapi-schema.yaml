@@ -1,0 +1,454 @@
+openapi: 3.1.0
+info:
+  title: FREEDUMB Financial API for ChatGPT
+  description: |
+    API para que ChatGPT interactúe con FREEDUMB, permitiendo a los usuarios:
+    - Guardar transacciones en lenguaje natural
+    - Ver sus datos financieros con widgets interactivos
+    - Obtener insights financieros con IA
+    - Gestionar presupuestos
+  version: 1.0.0
+  contact:
+    name: FREEDUMB Support
+    email: support@freedumb.app
+
+servers:
+  - url: https://backend-production-053c.up.railway.app/api
+    description: Production server (Railway)
+  - url: http://localhost:3000/api
+    description: Development server
+
+paths:
+  # ==========================================
+  # TRANSACTIONS - Natural Language Processing
+  # ==========================================
+  /transactions/nlp:
+    post:
+      operationId: saveTransactionFromNaturalLanguage
+      summary: Guardar transacción desde lenguaje natural
+      description: |
+        Permite al usuario guardar una transacción hablando naturalmente.
+        Ejemplo: "Gasté $50 en Starbucks ayer con mi tarjeta Chase"
+      tags:
+        - Transactions
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - input
+              properties:
+                input:
+                  type: string
+                  description: Descripción en lenguaje natural de la transacción
+                  example: "Gasté $45 en Uber para ir al aeropuerto"
+      responses:
+        '201':
+          description: Transacción guardada exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transaction:
+                    $ref: '#/components/schemas/Transaction'
+                  parsed:
+                    type: object
+                    properties:
+                      confidence:
+                        type: number
+                        description: Nivel de confianza del parsing (0-1)
+                      originalInput:
+                        type: string
+
+  /transactions:
+    get:
+      operationId: getTransactions
+      summary: Obtener transacciones del usuario
+      description: |
+        Devuelve las transacciones con filtros opcionales.
+        ChatGPT puede generar un link al widget para visualización interactiva.
+      tags:
+        - Transactions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month, year, all]
+            default: month
+          description: Período de tiempo
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Filtrar por categoría específica
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [income, expense]
+          description: Tipo de transacción
+      responses:
+        '200':
+          description: Lista de transacciones
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transactions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Transaction'
+                  pagination:
+                    type: object
+                  widgetUrl:
+                    type: string
+                    description: URL del widget para visualización
+                    example: "https://freedumb.app/widget?user=123&period=month&token=xyz"
+
+  # ==========================================
+  # AI INSIGHTS
+  # ==========================================
+  /ai/insights:
+    get:
+      operationId: getFinancialInsights
+      summary: Obtener insights financieros con IA
+      description: |
+        Genera insights personalizados basados en el historial del usuario.
+        Incluye análisis de gastos, oportunidades de ahorro, y recomendaciones.
+      tags:
+        - AI
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [month, quarter, year]
+            default: month
+      responses:
+        '200':
+          description: Insights generados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  insights:
+                    type: object
+                    properties:
+                      spendingPatterns:
+                        type: object
+                      savingsOpportunities:
+                        type: array
+                        items:
+                          type: string
+                      budgetRecommendations:
+                        type: object
+                      warnings:
+                        type: array
+                  widgetUrl:
+                    type: string
+                    description: URL del widget con visualización de insights
+
+  /ai/chat:
+    post:
+      operationId: chatWithFinancialAssistant
+      summary: Chat con asistente financiero IA
+      description: |
+        Conversa con Eliza, la asistente financiera IA de FREEDUMB.
+        Proporciona consejos personalizados basados en tus datos.
+      tags:
+        - AI
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - message
+              properties:
+                message:
+                  type: string
+                  example: "¿Cómo puedo ahorrar más dinero este mes?"
+                includeFinancialContext:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Respuesta del asistente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  response:
+                    type: string
+                  suggestions:
+                    type: array
+                    items:
+                      type: string
+
+  # ==========================================
+  # BUDGETS
+  # ==========================================
+  /budgets:
+    get:
+      operationId: getBudgets
+      summary: Obtener presupuestos del usuario
+      description: Ver todos los presupuestos y su estado actual
+      tags:
+        - Budgets
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de presupuestos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  budgets:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Budget'
+                  widgetUrl:
+                    type: string
+
+    post:
+      operationId: createBudget
+      summary: Crear nuevo presupuesto
+      tags:
+        - Budgets
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - budget_name
+                - category
+                - amount_limit
+              properties:
+                budget_name:
+                  type: string
+                  example: "Presupuesto de Comida Mensual"
+                category:
+                  type: string
+                  example: "food"
+                amount_limit:
+                  type: number
+                  example: 500
+                period:
+                  type: string
+                  enum: [monthly, weekly, daily]
+                  default: monthly
+                alert_threshold:
+                  type: integer
+                  description: Porcentaje para alertar (0-100)
+                  default: 80
+      responses:
+        '201':
+          description: Presupuesto creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+
+  # ==========================================
+  # WIDGET GENERATION
+  # ==========================================
+  /widget/generate:
+    post:
+      operationId: generateWidgetUrl
+      summary: Generar URL de widget interactivo
+      description: |
+        ChatGPT usa este endpoint para generar URLs de widgets personalizados.
+        El widget muestra datos de forma visual e interactiva.
+      tags:
+        - Widget
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - widgetType
+              properties:
+                widgetType:
+                  type: string
+                  enum: [dashboard, transactions, budgets, insights, category]
+                  description: Tipo de widget a generar
+                period:
+                  type: string
+                  enum: [day, week, month, year]
+                  default: month
+                category:
+                  type: string
+                  description: Filtrar por categoría específica
+                params:
+                  type: object
+                  description: Parámetros adicionales personalizados
+      responses:
+        '200':
+          description: URL del widget generada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  widgetUrl:
+                    type: string
+                    example: "https://freedumb.app/widget/dashboard?user=123&period=month&token=abc123"
+                  embedCode:
+                    type: string
+                    description: Código HTML para embeber el widget
+                  expiresAt:
+                    type: string
+                    format: date-time
+                    description: Cuándo expira el token del widget
+
+  # ==========================================
+  # ANALYTICS
+  # ==========================================
+  /analytics/summary:
+    get:
+      operationId: getFinancialSummary
+      summary: Obtener resumen financiero
+      description: Resumen rápido de la situación financiera actual
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            default: month
+      responses:
+        '200':
+          description: Resumen financiero
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalIncome:
+                    type: number
+                  totalExpenses:
+                    type: number
+                  balance:
+                    type: number
+                  categoryBreakdown:
+                    type: object
+                  savingsRate:
+                    type: number
+                  widgetUrl:
+                    type: string
+
+# ==========================================
+# COMPONENTS
+# ==========================================
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Token JWT obtenido del endpoint /auth/login.
+        ChatGPT debe incluir este token en el header Authorization.
+
+  schemas:
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        amount:
+          type: number
+          example: 45.50
+        type:
+          type: string
+          enum: [income, expense]
+        category:
+          type: string
+          example: "Food & Dining"
+        merchant:
+          type: string
+          example: "Starbucks"
+        description:
+          type: string
+        payment_method:
+          type: string
+          example: "credit_card"
+        date:
+          type: string
+          format: date
+        is_tax_deductible:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    Budget:
+      type: object
+      properties:
+        id:
+          type: string
+        budget_name:
+          type: string
+        category:
+          type: string
+        amount_limit:
+          type: number
+        spent:
+          type: number
+          description: Cantidad gastada del presupuesto
+        remaining:
+          type: number
+        period:
+          type: string
+        alert_threshold:
+          type: integer
+        status:
+          type: string
+          enum: [ok, warning, exceeded]
+
+# ==========================================
+# TAGS
+# ==========================================
+tags:
+  - name: Transactions
+    description: Gestión de transacciones financieras
+  - name: AI
+    description: Funciones potenciadas por IA (GPT-4)
+  - name: Budgets
+    description: Gestión de presupuestos
+  - name: Widget
+    description: Generación de widgets interactivos
+  - name: Analytics
+    description: Análisis y reportes financieros

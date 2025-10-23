@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FREEDUMB - Financial Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.1/lib/anime.min.js"></script>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loader">
+            <div class="dollar-sign">$</div>
+            <p>Cargando tus datos financieros...</p>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div id="main-container" class="main-container hidden">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1 class="logo">💰 FREEDUMB</h1>
+                <div class="header-info">
+                    <span class="user-name" id="userName">Cargando...</span>
+                    <button class="refresh-btn" onclick="refreshData()">
+                        <span class="refresh-icon">🔄</span> Actualizar
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Dashboard Grid -->
+        <main class="dashboard">
+            <!-- Summary Cards -->
+            <section class="summary-cards">
+                <div class="card card-income animate-card">
+                    <div class="card-icon">📈</div>
+                    <div class="card-content">
+                        <h3>Ingresos Totales</h3>
+                        <p class="amount" id="totalIncome">$0</p>
+                        <span class="trend positive" id="incomeTrend">+0%</span>
+                    </div>
+                </div>
+
+                <div class="card card-expense animate-card">
+                    <div class="card-icon">📉</div>
+                    <div class="card-content">
+                        <h3>Gastos Totales</h3>
+                        <p class="amount" id="totalExpenses">$0</p>
+                        <span class="trend negative" id="expenseTrend">-0%</span>
+                    </div>
+                </div>
+
+                <div class="card card-balance animate-card">
+                    <div class="card-icon">💰</div>
+                    <div class="card-content">
+                        <h3>Balance</h3>
+                        <p class="amount" id="balance">$0</p>
+                        <span class="trend neutral" id="balanceTrend">0%</span>
+                    </div>
+                </div>
+
+                <div class="card card-savings animate-card">
+                    <div class="card-icon">🎯</div>
+                    <div class="card-content">
+                        <h3>Meta de Ahorro</h3>
+                        <p class="amount" id="savingsGoal">$0</p>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="savingsProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Charts Section -->
+            <section class="charts-section">
+                <!-- Spending by Category -->
+                <div class="chart-container animate-card">
+                    <h2>Gastos por Categoría</h2>
+                    <canvas id="categoryChart"></canvas>
+                </div>
+
+                <!-- Monthly Trend -->
+                <div class="chart-container animate-card">
+                    <h2>Tendencia Mensual</h2>
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </section>
+
+            <!-- Recent Transactions -->
+            <section class="transactions-section animate-card">
+                <h2>Transacciones Recientes</h2>
+                <div class="transactions-list" id="transactionsList">
+                    <!-- Transactions will be inserted here -->
+                </div>
+            </section>
+
+            <!-- AI Insights -->
+            <section class="insights-section animate-card">
+                <h2>💡 Insights de IA</h2>
+                <div class="insights-container" id="insightsContainer">
+                    <div class="insight-card">
+                        <div class="insight-icon">🤖</div>
+                        <p class="insight-text">Analizando tus datos...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Budget Overview -->
+            <section class="budget-section animate-card">
+                <h2>Estado de Presupuestos</h2>
+                <div class="budgets-list" id="budgetsList">
+                    <!-- Budgets will be inserted here -->
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Generado por ChatGPT 🤖 | Powered by FREEDUMB</p>
+            <p class="timestamp">Última actualización: <span id="timestamp"></span></p>
+        </footer>
+    </div>
+
+    <!-- Error Modal -->
+    <div id="error-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeErrorModal()">&times;</span>
+            <h2>⚠️ Error</h2>
+            <p id="error-message"></p>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
