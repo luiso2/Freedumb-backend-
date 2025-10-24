@@ -1,0 +1,21 @@
+openapi: 3.1.0
+info:
+  title: Freedumb AI - Personal Finance Assistant  
+  version: 1.0.0
+  description: Sistema completo de gestión financiera personal con IA integrada (GPT-4)
+
+servers:
+  - url: http://localhost:3000/api
+    description: Development Server
+  - url: https://new-production-cd21.up.railway.app/api/v1
+    description: Production Server
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
