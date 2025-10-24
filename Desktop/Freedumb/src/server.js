@@ -6,10 +6,17 @@ const rateLimit = require('express-rate-limit');
 const { connectMongoDB } = require('./database/mongodb');
 const errorHandler = require('./middleware/errorHandler');
 const logger = require('./utils/logger');
+const { authenticate } = require('./middleware/auth');
 
 // Import routes
 const authRoutes = require('./routes/auth.routes');
 const transactionRoutes = require('./routes/transaction.routes');
+const budgetRoutes = require('./routes/budget.routes');
+const investmentRoutes = require('./routes/investment.routes');
+const analyticsRoutes = require('./routes/analytics.routes');
+const aiRoutes = require('./routes/ai.routes');
+const notificationRoutes = require('./routes/notification.routes');
+const userRoutes = require('./routes/user.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -37,13 +44,13 @@ app.use(express.urlencoded({ extended: true }));
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
+  windowMs: 1 * 60 * 1000,
   max: 100,
   message: 'Too many requests from this IP, please try again later'
 });
 
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 5,
   message: 'Too many login attempts, please try again later'
 });
@@ -61,19 +68,33 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API Routes
+// API Routes (sin autenticación)
 app.use('/api/auth', authRoutes);
-app.use('/api/transactions', transactionRoutes);
+
+// API Routes (con autenticación)
+app.use('/api/transactions', authenticate, transactionRoutes);
+app.use('/api/budgets', authenticate, budgetRoutes);
+app.use('/api/investments', authenticate, investmentRoutes);
+app.use('/api/analytics', authenticate, analyticsRoutes);
+app.use('/api/ai', authenticate, aiRoutes);
+app.use('/api/notifications', authenticate, notificationRoutes);
+app.use('/api/users', authenticate, userRoutes);
 
 // API v1 Routes (alternative paths)
 app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/transactions', transactionRoutes);
+app.use('/api/v1/transactions', authenticate, transactionRoutes);
+app.use('/api/v1/budgets', authenticate, budgetRoutes);
+app.use('/api/v1/investments', authenticate, investmentRoutes);
+app.use('/api/v1/analytics', authenticate, analyticsRoutes);
+app.use('/api/v1/ai', authenticate, aiRoutes);
+app.use('/api/v1/notifications', authenticate, notificationRoutes);
+app.use('/api/v1/users', authenticate, userRoutes);
 
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
     error: 'Not Found',
-    message: `Cannot ${req.method} ${req.path}`,
+    message: 'Cannot ' + req.method + ' ' + req.path,
     timestamp: new Date().toISOString()
   });
 });
@@ -84,10 +105,8 @@ app.use(errorHandler);
 // Start server
 const startServer = async () => {
   try {
-    // Connect to MongoDB
     await connectMongoDB();
 
-    // Create logs directory if it doesn't exist
     const fs = require('fs');
     const path = require('path');
     const logsDir = path.join(__dirname, '..', 'logs');
@@ -95,14 +114,13 @@ const startServer = async () => {
       fs.mkdirSync(logsDir);
     }
 
-    // Start listening
     app.listen(PORT, () => {
-      logger.info(`🚀 Server running on port ${PORT}`);
-      logger.info(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`📍 Health check: http://localhost:${PORT}/health`);
-      console.log(`📍 API Base: http://localhost:${PORT}/api`);
+      logger.info('Server running on port ' + PORT);
+      logger.info('Environment: ' + (process.env.NODE_ENV || 'development'));
+      console.log('🚀 Server running on port ' + PORT);
+      console.log('🌍 Environment: ' + (process.env.NODE_ENV || 'development'));
+      console.log('📍 Health check: http://localhost:' + PORT + '/health');
+      console.log('📍 API Base: http://localhost:' + PORT + '/api');
     });
   } catch (error) {
     logger.error('Failed to start server:', error);
@@ -111,7 +129,6 @@ const startServer = async () => {
   }
 };
 
-// Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
   logger.error('Uncaught Exception:', error);
   console.error('Uncaught Exception:', error);

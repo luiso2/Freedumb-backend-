@@ -1,27 +1,26 @@
 const express = require('express');
-
 const router = express.Router();
 const openAIService = require('../services/openai.service');
-const { getModels } = require('../models');
+const User = require('../models/User');
+const Transaction = require('../models/Transaction');
+const Budget = require('../models/Budget');
 
 // Chat with AI assistant
 router.post('/chat', async (req, res) => {
   try {
     const { message, context = [] } = req.body;
-    const { User, Transaction } = getModels();
-    const { userId } = req;
+    const userId = req.user.id;
 
     // Get user data for context
-    const user = await User.findByPk(userId, {
-      attributes: { exclude: ['password'] }
-    });
+    const user = await User.findById(userId).select('-password');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
     // Get recent transactions for context
-    const transactions = await Transaction.findAll({
-      where: { userId },
-      limit: 100,
-      order: [['date', 'DESC']]
-    });
+    const transactions = await Transaction.find({ userId })
+      .sort({ date: -1 })
+      .limit(100);
 
     // Calculate financial data for context
     const financialData = {
@@ -67,19 +66,17 @@ router.post('/categorize', async (req, res) => {
 // Get financial insights
 router.get('/insights', async (req, res) => {
   try {
-    const { Transaction, User } = getModels();
-    const { userId } = req;
+    const userId = req.user.id;
 
     // Get user data
-    const user = await User.findByPk(userId, {
-      attributes: { exclude: ['password'] }
-    });
+    const user = await User.findById(userId).select('-password');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
     // Get transactions
-    const transactions = await Transaction.findAll({
-      where: { userId },
-      order: [['date', 'DESC']]
-    });
+    const transactions = await Transaction.find({ userId })
+      .sort({ date: -1 });
 
     const userData = {
       monthlyIncome: parseFloat(user.monthlyIncome) || 0,
@@ -101,18 +98,16 @@ router.get('/insights', async (req, res) => {
 // Get budget recommendations
 router.post('/budget-recommendations', async (req, res) => {
   try {
-    const { Transaction, Budget } = getModels();
-    const { userId } = req;
+    const userId = req.user.id;
 
     // Get transactions
-    const transactions = await Transaction.findAll({
-      where: { userId },
-      order: [['date', 'DESC']]
-    });
+    const transactions = await Transaction.find({ userId })
+      .sort({ date: -1 });
 
     // Get current budgets
-    const budgets = await Budget.findAll({
-      where: { userId, isActive: true }
+    const budgets = await Budget.find({ 
+      userId, 
+      isActive: true 
     });
 
     const currentBudget = {};
