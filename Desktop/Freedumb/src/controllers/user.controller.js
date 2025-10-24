@@ -1,15 +1,13 @@
 const logger = require('../utils/logger');
-const { getModels } = require('../models');
+const { User, Transaction, Budget, Investment, Notification } = require('../models');
 
 // Get user profile
 const getProfile = async (req, res) => {
   try {
-    const { User } = getModels();
+
     const { userId } = req;
 
-    const user = await User.findByPk(userId, {
-      attributes: { exclude: ['password'] }
-    });
+    const user = await User.findById(userId).select('-password');
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -25,10 +23,10 @@ const getProfile = async (req, res) => {
 // Update user profile
 const updateProfile = async (req, res) => {
   try {
-    const { User } = getModels();
+
     const { userId } = req;
 
-    const user = await User.findByPk(userId);
+    const user = await User.findById(userId);
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -37,11 +35,10 @@ const updateProfile = async (req, res) => {
     // Don't allow updating password or email through this endpoint
     const { password: _password, email: _email, ...updateData } = req.body;
 
-    await user.update(updateData);
+    Object.assign(user, updateData);
+    await user.save();
 
-    const updatedUser = await User.findByPk(userId, {
-      attributes: { exclude: ['password'] }
-    });
+    const updatedUser = await User.findById(userId).select('-password');
 
     res.json(updatedUser);
   } catch (error) {
@@ -53,17 +50,18 @@ const updateProfile = async (req, res) => {
 // Delete user account
 const deleteAccount = async (req, res) => {
   try {
-    const { User } = getModels();
+
     const { userId } = req;
 
-    const user = await User.findByPk(userId);
+    const user = await User.findById(userId);
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Soft delete by marking as inactive
-    await user.update({ isActive: false });
+    user.isActive = false;
+    await user.save();
 
     // In a production app, you might want to:
     // 1. Delete or anonymize user data

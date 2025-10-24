@@ -1,38 +1,39 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 
 const userSchema = new mongoose.Schema({
   _id: {
     type: String,
-    default: uuidv4
+    default: () => uuidv4()
   },
   email: {
     type: String,
-    required: true,
+    required: [true, 'El email es requerido'],
+    unique: true,
     lowercase: true,
     trim: true,
-    validate: {
-      validator: function(v) {
-        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-      },
-      message: 'Invalid email format'
-    }
+    match: [/^\S+@\S+\.\S+$/, 'Por favor ingresa un email válido']
   },
   password: {
     type: String,
-    required: true
+    required: [true, 'La contraseña es requerida'],
+    minlength: [6, 'La contraseña debe tener al menos 6 caracteres']
   },
   name: {
     type: String,
-    required: true
+    required: [true, 'El nombre es requerido'],
+    trim: true
   },
   monthlyIncome: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0
   },
   savingsGoal: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0
   },
   riskTolerance: {
     type: String,
@@ -46,7 +47,7 @@ const userSchema = new mongoose.Schema({
   },
   incomeBracket: {
     type: String,
-    default: null
+    trim: true
   },
   selfEmployed: {
     type: Boolean,
@@ -58,16 +59,36 @@ const userSchema = new mongoose.Schema({
   },
   lastLogin: {
     type: Date,
-    default: null
+    default: Date.now
   }
 }, {
   timestamps: true,
-  collection: 'users'
+  _id: false
 });
 
-// Index for email
-userSchema.index({ email: 1 }, { unique: true });
+// Hash password antes de guardar
+userSchema.pre('save', async function(next) {
+  if (!this.isModified('password')) return next();
+  
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
-const User = mongoose.model('User', userSchema);
+// Método para comparar contraseñas
+userSchema.methods.comparePassword = async function(candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
+};
 
-module.exports = User;
+// No retornar password en JSON
+userSchema.methods.toJSON = function() {
+  const user = this.toObject();
+  delete user.password;
+  return user;
+};
+
+module.exports = mongoose.model('User', userSchema);

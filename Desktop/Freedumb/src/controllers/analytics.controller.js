@@ -1,28 +1,25 @@
-const { Op } = require('sequelize');
 const logger = require('../utils/logger');
-const { getModels } = require('../models');
+const { User, Transaction, Budget, Investment, Notification } = require('../models');
 const openAIService = require('../services/openai.service');
 
 // Get financial summary
 const getSummary = async (req, res) => {
   try {
-    const { Transaction } = getModels();
+
     const { userId } = req;
 
     const { startDate, endDate } = req.query;
 
     // Build date filter
-    const dateFilter = {};
+    const filter = { userId };
     if (startDate || endDate) {
-      dateFilter.date = {};
-      if (startDate) dateFilter.date[Op.gte] = new Date(startDate);
-      if (endDate) dateFilter.date[Op.lte] = new Date(endDate);
+      filter.date = {};
+      if (startDate) filter.date.$gte = new Date(startDate);
+      if (endDate) filter.date.$lte = new Date(endDate);
     }
 
     // Get all transactions
-    const transactions = await Transaction.findAll({
-      where: { userId, ...dateFilter }
-    });
+    const transactions = await Transaction.find(filter);
 
     // Calculate totals
     const summary = {
@@ -62,7 +59,7 @@ const getSummary = async (req, res) => {
 // Get cashflow analysis
 const getCashflow = async (req, res) => {
   try {
-    const { Transaction } = getModels();
+
     const { userId } = req;
 
     const { months = 6 } = req.query;
@@ -71,13 +68,10 @@ const getCashflow = async (req, res) => {
     const startDate = new Date();
     startDate.setMonth(startDate.getMonth() - parseInt(months, 10));
 
-    const transactions = await Transaction.findAll({
-      where: {
-        userId,
-        date: { [Op.gte]: startDate }
-      },
-      order: [['date', 'ASC']]
-    });
+    const transactions = await Transaction.find({
+      userId,
+      date: { $gte: startDate }
+    }).sort({ date: 1 });
 
     // Group by month
     const cashflowByMonth = {};
@@ -116,29 +110,25 @@ const getCashflow = async (req, res) => {
 // Get predictions
 const getPredictions = async (req, res) => {
   try {
-    const { Transaction, User } = getModels();
+
     const { userId } = req;
     const { months = 3 } = req.query;
 
     // Get user data (for future use/validation)
-    const _user = await User.findByPk(userId, {
-      attributes: { exclude: ['password'] }
-    });
+    const _user = await User.findById(userId).select('-password');
 
     // Get historical transactions (last 12 months)
     const startDate = new Date();
     startDate.setMonth(startDate.getMonth() - 12);
 
-    const transactions = await Transaction.findAll({
-      where: {
-        userId,
-        date: { [Op.gte]: startDate }
-      }
+    const transactions = await Transaction.find({
+      userId,
+      date: { $gte: startDate }
     });
 
     // Use AI to predict cashflow
     const predictions = await openAIService.predictCashFlow(
-      transactions.map(t => t.toJSON()),
+      transactions.map(t => t.toObject()),
       parseInt(months, 10)
     );
 

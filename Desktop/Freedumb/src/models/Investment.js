@@ -4,79 +4,70 @@ const { v4: uuidv4 } = require('uuid');
 const investmentSchema = new mongoose.Schema({
   _id: {
     type: String,
-    default: uuidv4
+    default: () => uuidv4()
   },
   userId: {
     type: String,
     required: true,
-    ref: 'User'
+    ref: 'User',
+    index: true
   },
   symbol: {
     type: String,
-    required: true
+    required: [true, 'El símbolo es requerido'],
+    uppercase: true,
+    trim: true
   },
   name: {
     type: String,
-    required: true
+    required: [true, 'El nombre es requerido'],
+    trim: true
   },
   type: {
     type: String,
-    enum: ['stock', 'bond', 'crypto', 'etf', 'mutual_fund', 'real_estate', 'other'],
-    required: true
+    required: true,
+    enum: ['stock', 'crypto', 'bond', 'mutual_fund', 'etf'],
+    default: 'stock'
   },
   quantity: {
     type: Number,
-    required: true
+    required: [true, 'La cantidad es requerida'],
+    min: [0, 'La cantidad debe ser mayor a 0']
   },
   purchasePrice: {
     type: Number,
-    required: true
+    required: [true, 'El precio de compra es requerido'],
+    min: [0, 'El precio debe ser mayor a 0']
   },
   currentPrice: {
     type: Number,
-    required: true
+    default: 0,
+    min: 0
   },
   purchaseDate: {
     type: Date,
-    required: true
-  },
-  lastUpdated: {
-    type: Date,
+    required: true,
     default: Date.now
-  },
-  notes: {
-    type: String,
-    default: null
   }
 }, {
   timestamps: true,
-  collection: 'investments'
+  _id: false,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
-// Indexes
-investmentSchema.index({ userId: 1 });
-investmentSchema.index({ symbol: 1 });
-investmentSchema.index({ type: 1 });
-
-// Virtual fields for calculations
-investmentSchema.methods.getTotalValue = function() {
+// Campos virtuales calculados
+investmentSchema.virtual('totalValue').get(function() {
   return this.quantity * this.currentPrice;
-};
+});
 
-investmentSchema.methods.getTotalCost = function() {
-  return this.quantity * this.purchasePrice;
-};
+investmentSchema.virtual('totalGainLoss').get(function() {
+  return (this.currentPrice - this.purchasePrice) * this.quantity;
+});
 
-investmentSchema.methods.getGainLoss = function() {
-  return this.getTotalValue() - this.getTotalCost();
-};
+investmentSchema.virtual('gainLossPercentage').get(function() {
+  if (this.purchasePrice === 0) return 0;
+  return ((this.currentPrice - this.purchasePrice) / this.purchasePrice) * 100;
+});
 
-investmentSchema.methods.getGainLossPercentage = function() {
-  const cost = this.getTotalCost();
-  if (cost === 0) return 0;
-  return ((this.getGainLoss() / cost) * 100).toFixed(2);
-};
-
-const Investment = mongoose.model('Investment', investmentSchema);
-
-module.exports = Investment;
+module.exports = mongoose.model('Investment', investmentSchema);

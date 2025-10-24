@@ -1,204 +1,134 @@
-const { Op } = require('sequelize');
-const logger = require('../utils/logger');
-const { getModels } = require('../models');
-const openAIService = require('../services/openai.service');
+const Transaction = require('../models/Transaction');
 
-// Get all transactions for a user
-const getTransactions = async (req, res) => {
+// Get all transactions
+const getTransactions = async (req, res, next) => {
   try {
-    const { Transaction } = getModels();
-    const { userId } = req;
+    const { type, category, startDate, endDate, page = 1, limit = 50 } = req.query;
+    const userId = req.user.id;
 
-    const {
-      page = 1,
-      limit = 50,
-      type,
-      category,
-      startDate,
-      endDate,
-      sortBy = 'date',
-      order = 'DESC'
-    } = req.query;
-
-    const offset = (page - 1) * limit;
-
-    // Build where clause
-    const where = { userId };
-
-    if (type) where.type = type;
-    if (category) where.category = category;
+    // Build query
+    const query = { userId };
+    
+    if (type) query.type = type;
+    if (category) query.category = category;
     if (startDate || endDate) {
-      where.date = {};
-      if (startDate) where.date[Op.gte] = new Date(startDate);
-      if (endDate) where.date[Op.lte] = new Date(endDate);
+      query.date = {};
+      if (startDate) query.date.$gte = new Date(startDate);
+      if (endDate) query.date.$lte = new Date(endDate);
     }
 
-    // Query transactions
-    const { count, rows } = await Transaction.findAndCountAll({
-      where,
-      limit: parseInt(limit, 10),
-      offset: parseInt(offset, 10),
-      order: [[sortBy, order]]
-    });
+    // Pagination
+    const skip = (page - 1) * limit;
+
+    const transactions = await Transaction.find(query)
+      .sort({ date: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Transaction.countDocuments(query);
 
     res.json({
-      transactions: rows,
+      transactions,
       pagination: {
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-        total: count,
-        pages: Math.ceil(count / limit)
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
       }
     });
   } catch (error) {
-    logger.error('Get transactions error:', error);
-    res.status(500).json({ error: 'Failed to fetch transactions' });
+    next(error);
   }
 };
 
 // Get transaction by ID
-const getTransactionById = async (req, res) => {
+const getTransaction = async (req, res, next) => {
   try {
-    const { Transaction } = getModels();
-    const { id } = req.params;
-    const { userId } = req;
-
     const transaction = await Transaction.findOne({
-      where: { id, userId }
+      _id: req.params.id,
+      userId: req.user.id
     });
 
     if (!transaction) {
-      return res.status(404).json({ error: 'Transaction not found' });
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Transaction not found'
+      });
     }
 
     res.json(transaction);
   } catch (error) {
-    logger.error('Get transaction error:', error);
-    res.status(500).json({ error: 'Failed to fetch transaction' });
+    next(error);
   }
 };
 
 // Create transaction
-const createTransaction = async (req, res) => {
+const createTransaction = async (req, res, next) => {
   try {
-    const { Transaction } = getModels();
-    const { userId } = req;
-
-    const transaction = await Transaction.create({
+    const transactionData = {
       ...req.body,
-      userId
-    });
+      userId: req.user.id
+    };
 
-    // Emit real-time notification via WebSocket
-    if (global.io) {
-      global.io.to(`user-${userId}`).emit('transaction:created', transaction);
-    }
+    const transaction = new Transaction(transactionData);
+    await transaction.save();
 
     res.status(201).json(transaction);
   } catch (error) {
-    logger.error('Create transaction error:', error);
-    res.status(500).json({ error: 'Failed to create transaction' });
-  }
-};
-
-// Create transaction from natural language
-const createTransactionFromNLP = async (req, res) => {
-  try {
-    const { Transaction } = getModels();
-    const { input } = req.body;
-    const { userId } = req;
-
-    // Parse natural language input
-    const parsed = await openAIService.processTransactionNLP(input);
-
-    // Create transaction with parsed data
-    const transaction = await Transaction.create({
-      ...parsed,
-      userId,
-      description: parsed.description || input
-    });
-
-    // Emit real-time notification via WebSocket
-    if (global.io) {
-      global.io.to(`user-${userId}`).emit('transaction:created', transaction);
-    }
-
-    res.status(201).json({
-      transaction,
-      parsed: {
-        confidence: parsed.confidence || 0.95,
-        originalInput: input
-      }
-    });
-  } catch (error) {
-    logger.error('Create transaction from NLP error:', error);
-    res.status(500).json({ error: error.message || 'Failed to parse transaction' });
+    next(error);
   }
 };
 
 // Update transaction
-const updateTransaction = async (req, res) => {
+const updateTransaction = async (req, res, next) => {
   try {
-    const { Transaction } = getModels();
-    const { id } = req.params;
-    const { userId } = req;
-
-    const transaction = await Transaction.findOne({
-      where: { id, userId }
-    });
+    const transaction = await Transaction.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.id },
+      req.body,
+      { new: true, runValidators: true }
+    );
 
     if (!transaction) {
-      return res.status(404).json({ error: 'Transaction not found' });
-    }
-
-    await transaction.update(req.body);
-
-    // Emit real-time notification via WebSocket
-    if (global.io) {
-      global.io.to(`user-${userId}`).emit('transaction:updated', transaction);
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Transaction not found'
+      });
     }
 
     res.json(transaction);
   } catch (error) {
-    logger.error('Update transaction error:', error);
-    res.status(500).json({ error: 'Failed to update transaction' });
+    next(error);
   }
 };
 
 // Delete transaction
-const deleteTransaction = async (req, res) => {
+const deleteTransaction = async (req, res, next) => {
   try {
-    const { Transaction } = getModels();
-    const { id } = req.params;
-    const { userId } = req;
-
-    const transaction = await Transaction.findOne({
-      where: { id, userId }
+    const transaction = await Transaction.findOneAndDelete({
+      _id: req.params.id,
+      userId: req.user.id
     });
 
     if (!transaction) {
-      return res.status(404).json({ error: 'Transaction not found' });
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Transaction not found'
+      });
     }
 
-    await transaction.destroy();
-
-    // Emit real-time notification via WebSocket
-    if (global.io) {
-      global.io.to(`user-${userId}`).emit('transaction:deleted', { id });
-    }
-
-    res.status(204).send();
+    res.json({
+      message: 'Transaction deleted successfully',
+      transaction
+    });
   } catch (error) {
-    logger.error('Delete transaction error:', error);
-    res.status(500).json({ error: 'Failed to delete transaction' });
+    next(error);
   }
 };
 
 module.exports = {
   getTransactions,
-  getTransactionById,
+  getTransaction,
   createTransaction,
-  createTransactionFromNLP,
   updateTransaction,
   deleteTransaction
 };

@@ -1,29 +1,31 @@
 const logger = require('../utils/logger');
-const { getModels } = require('../models');
+const { User, Transaction, Budget, Investment, Notification } = require('../models');
 
 // Get all notifications for a user
 const getNotifications = async (req, res) => {
   try {
-    const { Notification } = getModels();
     const { userId } = req;
+    const { isRead, type, priority, limit = 50 } = req.query;
 
-    const { isRead, type, limit = 50 } = req.query;
-
-    const where = { userId };
+    const filter = { userId };
+    
     if (isRead !== undefined) {
-      where.isRead = isRead === 'true';
+      filter.isRead = isRead === 'true';
     }
+    
     if (type) {
-      where.type = type;
+      filter.type = type;
+    }
+    
+    if (priority) {
+      filter.priority = priority;
     }
 
-    const notifications = await Notification.findAll({
-      where,
-      limit: parseInt(limit, 10),
-      order: [['createdAt', 'DESC']]
-    });
+    const notifications = await Notification.find(filter)
+      .limit(parseInt(limit, 10))
+      .sort({ createdAt: -1 });
 
-    res.json({ notifications });
+    res.json(notifications);
   } catch (error) {
     logger.error('Get notifications error:', error);
     res.status(500).json({ error: 'Failed to fetch notifications' });
@@ -33,12 +35,12 @@ const getNotifications = async (req, res) => {
 // Get notification by ID
 const getNotificationById = async (req, res) => {
   try {
-    const { Notification } = getModels();
     const { id } = req.params;
     const { userId } = req;
 
     const notification = await Notification.findOne({
-      where: { id, userId }
+      _id: id,
+      userId
     });
 
     if (!notification) {
@@ -55,22 +57,21 @@ const getNotificationById = async (req, res) => {
 // Mark notification as read
 const markAsRead = async (req, res) => {
   try {
-    const { Notification } = getModels();
     const { id } = req.params;
     const { userId } = req;
 
     const notification = await Notification.findOne({
-      where: { id, userId }
+      _id: id,
+      userId
     });
 
     if (!notification) {
       return res.status(404).json({ error: 'Notification not found' });
     }
 
-    await notification.update({
-      isRead: true,
-      readAt: new Date()
-    });
+    notification.isRead = true;
+    notification.readAt = new Date();
+    await notification.save();
 
     res.json(notification);
   } catch (error) {
@@ -82,23 +83,25 @@ const markAsRead = async (req, res) => {
 // Mark all notifications as read
 const markAllAsRead = async (req, res) => {
   try {
-    const { Notification } = getModels();
     const { userId } = req;
 
-    await Notification.update(
+    const result = await Notification.updateMany(
       {
-        isRead: true,
-        readAt: new Date()
+        userId,
+        isRead: false
       },
       {
-        where: {
-          userId,
-          isRead: false
+        $set: {
+          isRead: true,
+          readAt: new Date()
         }
       }
     );
 
-    res.json({ message: 'All notifications marked as read' });
+    res.json({ 
+      message: 'All notifications marked as read',
+      updatedCount: result.modifiedCount
+    });
   } catch (error) {
     logger.error('Mark all as read error:', error);
     res.status(500).json({ error: 'Failed to mark all notifications as read' });
@@ -108,21 +111,24 @@ const markAllAsRead = async (req, res) => {
 // Delete notification
 const deleteNotification = async (req, res) => {
   try {
-    const { Notification } = getModels();
     const { id } = req.params;
     const { userId } = req;
 
     const notification = await Notification.findOne({
-      where: { id, userId }
+      _id: id,
+      userId
     });
 
     if (!notification) {
       return res.status(404).json({ error: 'Notification not found' });
     }
 
-    await notification.destroy();
+    await notification.deleteOne();
 
-    res.status(204).send();
+    res.json({ 
+      message: 'Notification deleted successfully',
+      id 
+    });
   } catch (error) {
     logger.error('Delete notification error:', error);
     res.status(500).json({ error: 'Failed to delete notification' });

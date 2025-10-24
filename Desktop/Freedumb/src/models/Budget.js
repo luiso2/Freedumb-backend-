@@ -4,38 +4,43 @@ const { v4: uuidv4 } = require('uuid');
 const budgetSchema = new mongoose.Schema({
   _id: {
     type: String,
-    default: uuidv4
+    default: () => uuidv4()
   },
   userId: {
     type: String,
     required: true,
-    ref: 'User'
+    ref: 'User',
+    index: true
   },
   name: {
     type: String,
-    required: true
+    required: [true, 'El nombre es requerido'],
+    trim: true
   },
   category: {
     type: String,
-    required: true
+    required: true,
+    trim: true
   },
   limit: {
     type: Number,
-    required: true
+    required: [true, 'El límite es requerido'],
+    min: [0, 'El límite debe ser mayor o igual a 0']
   },
   spent: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0
   },
   period: {
     type: String,
-    enum: ['weekly', 'monthly', 'quarterly', 'yearly'],
+    required: true,
+    enum: ['weekly', 'monthly', 'yearly'],
     default: 'monthly'
   },
   startDate: {
     type: Date,
-    required: true,
-    default: Date.now
+    required: true
   },
   endDate: {
     type: Date,
@@ -47,24 +52,16 @@ const budgetSchema = new mongoose.Schema({
     min: 0,
     max: 100
   },
-  alertSent: {
-    type: Boolean,
-    default: false
-  },
   isActive: {
     type: Boolean,
     default: true
   }
 }, {
   timestamps: true,
-  collection: 'budgets'
+  _id: false
 });
 
-// Indexes
-budgetSchema.index({ userId: 1 });
-budgetSchema.index({ category: 1 });
-budgetSchema.index({ isActive: 1 });
+budgetSchema.index({ userId: 1, isActive: 1 });
+budgetSchema.index({ userId: 1, category: 1 });
 
-const Budget = mongoose.model('Budget', budgetSchema);
-
-module.exports = Budget;
+module.exports = mongoose.model('Budget', budgetSchema);

@@ -4,58 +4,48 @@ const { v4: uuidv4 } = require('uuid');
 const notificationSchema = new mongoose.Schema({
   _id: {
     type: String,
-    default: uuidv4
+    default: () => uuidv4()
   },
   userId: {
     type: String,
     required: true,
-    ref: 'User'
+    ref: 'User',
+    index: true
   },
   type: {
     type: String,
-    enum: ['budget_alert', 'transaction', 'investment', 'system', 'info'],
-    required: true
+    required: true,
+    enum: ['budget_alert', 'goal_reached', 'transaction_reminder', 'ai_insight'],
+    index: true
   },
   title: {
     type: String,
-    required: true
+    required: [true, 'El título es requerido'],
+    trim: true
   },
   message: {
     type: String,
-    required: true
-  },
-  priority: {
-    type: String,
-    enum: ['low', 'medium', 'high', 'urgent'],
-    default: 'medium'
+    required: [true, 'El mensaje es requerido'],
+    trim: true
   },
   isRead: {
     type: Boolean,
-    default: false
+    default: false,
+    index: true
   },
-  readAt: {
-    type: Date,
-    default: null
-  },
-  relatedEntityType: {
+  priority: {
     type: String,
-    default: null
+    enum: ['low', 'medium', 'high'],
+    default: 'medium'
   },
-  relatedEntityId: {
-    type: String,
-    default: null
+  relatedEntity: {
+    type: mongoose.Schema.Types.Mixed
   }
 }, {
   timestamps: true,
-  collection: 'notifications'
+  _id: false
 });
 
-// Indexes
-notificationSchema.index({ userId: 1 });
-notificationSchema.index({ isRead: 1 });
-notificationSchema.index({ type: 1 });
-notificationSchema.index({ userId: 1, isRead: 1 });
+notificationSchema.index({ userId: 1, isRead: 1, createdAt: -1 });
 
-const Notification = mongoose.model('Notification', notificationSchema);
-
-module.exports = Notification;
+module.exports = mongoose.model('Notification', notificationSchema);

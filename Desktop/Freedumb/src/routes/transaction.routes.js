@@ -1,24 +1,30 @@
 const express = require('express');
-
 const router = express.Router();
-const transactionController = require('../controllers/transaction.controller');
+const { authenticate } = require('../middleware/auth');
+const {
+  getTransactions,
+  getTransaction,
+  createTransaction,
+  updateTransaction,
+  deleteTransaction
+} = require('../controllers/transaction.controller');
 
-// Get all transactions
-router.get('/', transactionController.getTransactions);
+// All routes require authentication
+router.use(authenticate);
 
-// Create transaction
-router.post('/', transactionController.createTransaction);
+// GET /api/transactions - Get all transactions
+router.get('/', getTransactions);
 
-// Create transaction from natural language
-router.post('/nlp', transactionController.createTransactionFromNLP);
+// GET /api/transactions/:id - Get transaction by ID
+router.get('/:id', getTransaction);
 
-// Get transaction by ID
-router.get('/:id', transactionController.getTransactionById);
+// POST /api/transactions - Create transaction
+router.post('/', createTransaction);
 
-// Update transaction
-router.put('/:id', transactionController.updateTransaction);
+// PUT /api/transactions/:id - Update transaction
+router.put('/:id', updateTransaction);
 
-// Delete transaction
-router.delete('/:id', transactionController.deleteTransaction);
+// DELETE /api/transactions/:id - Delete transaction
+router.delete('/:id', deleteTransaction);
 
 module.exports = router;

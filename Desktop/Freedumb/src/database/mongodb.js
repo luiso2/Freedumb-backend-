@@ -1,29 +1,35 @@
 const mongoose = require('mongoose');
+const logger = require('../utils/logger');
 
 const connectMongoDB = async () => {
   try {
-    const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/freedumb_logs';
-
-    await mongoose.connect(uri);
-
-    console.log('MongoDB connected successfully');
-
-    mongoose.connection.on('error', err => {
-      console.error('MongoDB connection error:', err);
+    await mongoose.connect(process.env.MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
     });
-
-    mongoose.connection.on('disconnected', () => {
-      console.warn('MongoDB disconnected');
-    });
-
-    return mongoose.connection;
+    
+    logger.info('✅ MongoDB connected successfully');
+    console.log('✅ MongoDB connected successfully');
   } catch (error) {
-    console.error('Unable to connect to MongoDB:', error.message);
-    console.warn('Server starting without MongoDB connection');
-    return null;
+    logger.error('❌ MongoDB connection error:', error);
+    console.error('❌ MongoDB connection error:', error.message);
+    process.exit(1);
   }
 };
 
-module.exports = {
-  connectMongoDB
-};
+// Event listeners
+mongoose.connection.on('disconnected', () => {
+  logger.warn('MongoDB disconnected');
+});
+
+mongoose.connection.on('error', (error) => {
+  logger.error('MongoDB error:', error);
+});
+
+process.on('SIGINT', async () => {
+  await mongoose.connection.close();
+  logger.info('MongoDB connection closed due to app termination');
+  process.exit(0);
+});
+
+module.exports = { connectMongoDB };

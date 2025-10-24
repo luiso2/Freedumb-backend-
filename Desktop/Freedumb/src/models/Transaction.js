@@ -4,55 +4,51 @@ const { v4: uuidv4 } = require('uuid');
 const transactionSchema = new mongoose.Schema({
   _id: {
     type: String,
-    default: uuidv4
+    default: () => uuidv4()
   },
   userId: {
     type: String,
     required: true,
-    ref: 'User'
+    ref: 'User',
+    index: true
   },
   amount: {
     type: Number,
-    required: true
+    required: [true, 'El monto es requerido'],
+    min: [0.01, 'El monto debe ser mayor a 0']
   },
   type: {
     type: String,
-    enum: ['income', 'expense'],
-    required: true
+    required: true,
+    enum: ['income', 'expense', 'transfer'],
+    index: true
   },
   category: {
     type: String,
-    required: true
-  },
-  subCategory: {
-    type: String,
-    default: null
+    required: true,
+    trim: true,
+    index: true
   },
   description: {
     type: String,
-    default: null
+    trim: true
   },
   merchant: {
     type: String,
-    default: null
+    trim: true
   },
   paymentMethod: {
     type: String,
-    enum: ['cash', 'credit_card', 'debit_card', 'bank_transfer', 'other'],
-    default: 'cash'
+    trim: true
   },
   cardName: {
     type: String,
-    default: null
+    trim: true
   },
-  businessType: {
-    type: String,
-    enum: ['personal', 'business'],
-    default: 'personal'
-  },
-  businessName: {
-    type: String,
-    default: null
+  date: {
+    type: Date,
+    default: Date.now,
+    index: true
   },
   isTaxDeductible: {
     type: Boolean,
@@ -62,38 +58,27 @@ const transactionSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  recurringFrequency: {
+  notes: {
     type: String,
-    enum: ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'],
-    default: null
+    trim: true
   },
-  date: {
-    type: Date,
-    required: true,
-    default: Date.now
+  aiCategorized: {
+    type: Boolean,
+    default: false
   },
   confidence: {
     type: Number,
-    default: 1.0,
     min: 0,
     max: 1
-  },
-  notes: {
-    type: String,
-    default: null
   }
 }, {
   timestamps: true,
-  collection: 'transactions'
+  _id: false
 });
 
-// Indexes for performance
-transactionSchema.index({ userId: 1 });
-transactionSchema.index({ date: -1 });
-transactionSchema.index({ type: 1 });
-transactionSchema.index({ category: 1 });
+// Índices compuestos para queries frecuentes
 transactionSchema.index({ userId: 1, date: -1 });
+transactionSchema.index({ userId: 1, category: 1, date: -1 });
+transactionSchema.index({ userId: 1, type: 1, date: -1 });
 
-const Transaction = mongoose.model('Transaction', transactionSchema);
-
-module.exports = Transaction;
+module.exports = mongoose.model('Transaction', transactionSchema);
