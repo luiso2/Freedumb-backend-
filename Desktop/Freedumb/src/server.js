@@ -36,6 +36,9 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization']
 };
 
+// Trust proxy for Railway deployment
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(helmet());
 app.use(cors(corsOptions));
@@ -61,10 +64,11 @@ app.use('/api/auth', authLimiter);
 // Health check
 app.get('/health', (req, res) => {
   res.json({
-    status: 'ok',
+    status: 'healthy',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    version: '1.0.0'
   });
 });
 
