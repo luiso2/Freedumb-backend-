@@ -93,6 +93,89 @@ async function authHybrid(req, res, next){
 app.get("/", (_,res)=>res.send("✅ Backend OAuth Provider + Finance API activo"));
 
 // ============================================================
+// ===============  OAUTH PARA FRONTEND (WEB/MOBILE)  ========
+// ============================================================
+// Estas rutas son para que tu frontend web/mobile autentique usuarios
+// FLUJO:
+// Frontend  -> window.location = "http://backend/auth/google"
+// Backend   -> redirige a Google OAuth
+// Google    -> vuelve a /auth/google/callback con ?code
+// Backend   -> canjea code, obtiene perfil, emite JWT, redirige al frontend con token
+
+// Variable de entorno para la URL del frontend (para redirección post-login)
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+
+// Inicia el flujo de Google OAuth para el frontend
+app.get("/auth/google", (req, res) => {
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: `${req.protocol}://${req.get('host')}/auth/google/callback`,
+    response_type: "code",
+    scope: "openid email profile",
+    access_type: "online"
+  });
+  const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  return res.redirect(302, googleAuthUrl);
+});
+
+// Callback de Google OAuth para el frontend
+app.get("/auth/google/callback", async (req, res) => {
+  try {
+    const { code } = req.query;
+    if (!code) return res.status(400).send("Falta código de autorización");
+
+    const redirectUri = `${req.protocol}://${req.get('host')}/auth/google/callback`;
+
+    // Intercambia el code por tokens de Google
+    const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code"
+      })
+    });
+
+    if (!tokenResp.ok) {
+      const txt = await tokenResp.text();
+      console.error("Error obteniendo token de Google:", txt);
+      return res.status(500).send("Error en autenticación con Google");
+    }
+
+    const tokens = await tokenResp.json();
+
+    // Obtiene información del usuario
+    const userInfoResp = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${tokens.access_token}` }
+    });
+    const profile = await userInfoResp.json();
+
+    // Genera JWT para el frontend
+    const accessToken = jwt.sign(
+      { user: { sub: profile.sub, email: profile.email, name: profile.name, picture: profile.picture } },
+      JWT_SECRET,
+      { expiresIn: "30d" }
+    );
+
+    // Redirige al frontend con el token en la URL
+    const frontendRedirect = new URL(FRONTEND_URL);
+    frontendRedirect.searchParams.set("token", accessToken);
+    frontendRedirect.searchParams.set("email", profile.email);
+    frontendRedirect.searchParams.set("name", profile.name);
+
+    return res.redirect(302, frontendRedirect.toString());
+  } catch (e) {
+    console.error("Error en callback de Google:", e);
+    return res.status(500).send("Error procesando autenticación");
+  }
+});
+//
+// =============  FIN OAUTH PARA FRONTEND  ====================
+
+// ============================================================
 // ===============  PROVEEDOR OAUTH PARA CHATGPT  =============
 // ============================================================
 //
