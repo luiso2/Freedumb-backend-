@@ -4,8 +4,7 @@ const { User, Transaction, Budget, Investment, Notification } = require('../mode
 // Get user profile
 const getProfile = async (req, res) => {
   try {
-
-    const { userId } = req;
+    const userId = req.user.id;
 
     const user = await User.findById(userId).select('-password');
 
@@ -23,8 +22,7 @@ const getProfile = async (req, res) => {
 // Update user profile
 const updateProfile = async (req, res) => {
   try {
-
-    const { userId } = req;
+    const userId = req.user.id;
 
     const user = await User.findById(userId);
 
@@ -50,8 +48,7 @@ const updateProfile = async (req, res) => {
 // Delete user account
 const deleteAccount = async (req, res) => {
   try {
-
-    const { userId } = req;
+    const userId = req.user.id;
 
     const user = await User.findById(userId);
 
