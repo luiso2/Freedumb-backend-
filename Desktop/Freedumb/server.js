@@ -2,6 +2,8 @@ import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
+import session from "express-session";
+import passport from "./config/passport.js";
 import authRoutes from "./routes/auth.js";
 
 dotenv.config();
@@ -12,6 +14,23 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Session configuration for Passport
+app.use(
+  session({
+    secret: process.env.JWT_SECRET || 'your-session-secret',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === 'production', // true in production (HTTPS)
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
+  })
+);
+
+// Initialize Passport
+app.use(passport.initialize());
+app.use(passport.session());
 
 // ===== MongoDB Connection =====
 const mongoUri = process.env.MONGODB_URI || process.env.RAILWAY_MONGODB_URL;
@@ -105,6 +124,8 @@ app.get("/", (req, res) => {
       api: {
         "POST /api/auth/login": "Login de usuario",
         "POST /api/auth/register": "Registro de usuario",
+        "GET /api/auth/google": "Iniciar OAuth con Google",
+        "GET /api/auth/google/callback": "Callback de Google OAuth",
         "POST /api/auth/refresh": "Refrescar token",
         "POST /api/auth/logout": "Logout de usuario",
         "POST /api/transactions": "Crear transacción (nueva API)",

@@ -3,6 +3,7 @@ import express from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
+import passportConfig from '../config/passport.js';
 
 const router = express.Router();
 
@@ -496,5 +497,112 @@ router.post('/logout', async (req, res) => {
     });
   }
 });
+
+/**
+ * GET /api/auth/google
+ * Initiates Google OAuth flow
+ * Redirects user to Google's OAuth consent screen
+ */
+router.get('/google',
+  passportConfig.authenticate('google', {
+    scope: ['profile', 'email']
+  })
+);
+
+/**
+ * GET /api/auth/google/callback
+ * Google OAuth callback endpoint
+ * Called by Google after user approves access
+ */
+router.get('/google/callback',
+  passportConfig.authenticate('google', {
+    failureRedirect: '/login',
+    session: false
+  }),
+  async (req, res) => {
+    try {
+      // User is authenticated via Passport
+      const user = req.user;
+
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication failed'
+        });
+      }
+
+      // Generate JWT tokens
+      const accessToken = jwt.sign(
+        {
+          userId: user._id,
+          email: user.email,
+          role: user.role
+        },
+        process.env.JWT_SECRET || 'your-secret-key',
+        { expiresIn: '1h' }
+      );
+
+      const refreshToken = jwt.sign(
+        { userId: user._id },
+        process.env.JWT_REFRESH_SECRET || 'your-refresh-secret',
+        { expiresIn: '7d' }
+      );
+
+      // Save session
+      await Session.create({
+        userId: user._id,
+        token: accessToken,
+        refreshToken: refreshToken,
+        userAgent: req.headers['user-agent'],
+        ipAddress: req.ip,
+        isActive: true,
+        expiresAt: new Date(Date.now() + 3600000), // 1 hour
+        createdAt: new Date(),
+        lastActivity: new Date()
+      });
+
+      // Log authentication
+      await AuthLog.create({
+        userId: user._id,
+        action: 'login',
+        success: true,
+        timestamp: new Date(),
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent']
+      });
+
+      // Option 1: Return JSON response (for API clients)
+      // You can uncomment this if you want to return JSON
+      /*
+      return res.json({
+        success: true,
+        accessToken,
+        refreshToken,
+        user: {
+          id: user._id,
+          email: user.email,
+          name: user.name,
+          role: user.role
+        }
+      });
+      */
+
+      // Option 2: Redirect to frontend with tokens in URL
+      // This is useful if you have a separate frontend application
+      const redirectUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+      return res.redirect(
+        `${redirectUrl}/auth/callback?accessToken=${accessToken}&refreshToken=${refreshToken}`
+      );
+
+    } catch (error) {
+      console.error('Google OAuth callback error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Server error',
+        details: error.message
+      });
+    }
+  }
+);
 
 export default router;

@@ -38,6 +38,16 @@ const userSchema = new mongoose.Schema({
     unique: true,
     sparse: true
   },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true
+  },
+  authProvider: {
+    type: String,
+    enum: ['local', 'google'],
+    default: 'local'
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -59,5 +69,6 @@ const userSchema = new mongoose.Schema({
 // Index for API key lookup
 userSchema.index({ apiKey: 1 });
 userSchema.index({ email: 1 });
+userSchema.index({ googleId: 1 });
 
 module.exports = mongoose.model('User', userSchema);
