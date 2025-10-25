@@ -160,7 +160,7 @@ app.post("/oauth/token", express.urlencoded({ extended: true }), (req, res) => {
 });
 
 // ================== API DE NEGOCIO ==================
-app.post("/transactions", authHybrid, async (req, res) => {
+app.post("/api/v1/transactions", authHybrid, async (req, res) => {
   try {
     const userId = req.user?.userId;
     if (!userId) return res.status(401).json({ error: "No autorizado" });
@@ -187,7 +187,7 @@ app.post("/transactions", authHybrid, async (req, res) => {
   }
 });
 
-app.get("/transactions", authHybrid, async (req, res) => {
+app.get("/api/v1/transactions", authHybrid, async (req, res) => {
   try {
     const userId = req.user?.userId;
     if (!userId) return res.status(401).json({ error: "No autorizado" });
