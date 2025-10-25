@@ -2,6 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
+import authRoutes from "./routes/auth.js";
 
 dotenv.config();
 
@@ -102,6 +103,10 @@ app.get("/", (req, res) => {
         "DELETE /transactions/:id": "Eliminar transacción"
       },
       api: {
+        "POST /api/auth/login": "Login de usuario",
+        "POST /api/auth/register": "Registro de usuario",
+        "POST /api/auth/refresh": "Refrescar token",
+        "POST /api/auth/logout": "Logout de usuario",
         "POST /api/transactions": "Crear transacción (nueva API)",
         "GET /api/transactions": "Listar transacciones (nueva API)",
         "GET /api/summary": "Resumen financiero (nueva API)",
@@ -279,7 +284,11 @@ app.delete("/transactions/:id", authenticateApiKey, async (req, res) => {
 });
 
 // ===== MODERN API ENDPOINTS (/api/*) =====
-// TODO: Importar rutas modulares cuando estén listas con ES modules
+
+// Auth routes (login, register, refresh, logout)
+app.use("/api/auth", authRoutes);
+
+// TODO: Importar otras rutas modulares cuando estén listas con ES modules
 
 // ===== Server Start =====
 const PORT = process.env.PORT || 3000;

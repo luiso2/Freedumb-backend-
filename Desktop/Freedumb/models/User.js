@@ -41,6 +41,16 @@ const userSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  lastLogin: {
+    type: Date
+  },
+  metadata: {
+    lastLoginIP: String,
+    loginCount: {
+      type: Number,
+      default: 0
+    }
   }
 }, {
   timestamps: true
