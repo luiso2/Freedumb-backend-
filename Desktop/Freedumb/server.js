@@ -1,11 +1,15 @@
 // server.js
-import express from "express";
-import mongoose from "mongoose";
-import cors from "cors";
-import dotenv from "dotenv";
-import jwt from "jsonwebtoken";
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+const dotenv = require("dotenv");
+const jwt = require("jsonwebtoken");
 
 dotenv.config();
+
+// Importar rutas y modelos
+const transactionRoutes = require('./routes/transactions');
+const { User, initializeDefaultCategories } = require('./models');
 
 const app = express();
 app.use(cors());
@@ -22,49 +26,14 @@ const {
 // ===== DB =====
 const mongoUri = MONGODB_URI || RAILWAY_MONGODB_URL;
 mongoose.connect(mongoUri, { autoIndex: true })
-  .then(() => console.log("✅ MongoDB ok"))
+  .then(() => {
+    console.log("✅ MongoDB ok");
+    // Inicializar categorías por defecto
+    initializeDefaultCategories();
+  })
   .catch(e => console.error("❌ Mongo error:", e));
 
-// ===== Modelos =====
-const transactionSchema = new mongoose.Schema({
-  userId: { type: String, required: true }, // guardamos Google "sub" como string
-  type: { type: String, enum: ["gasto","ingreso"], required: true },
-  amount: { type: Number, required: true, min: 0 },
-  card: String,
-  description: String,
-  categoryId: String,
-  date: { type: Date, default: Date.now }
-}, { timestamps: true });
-const Transaction = mongoose.model("Transaction", transactionSchema);
-
-// ===== Helpers =====
-const normalizeAmount = v => {
-  if (typeof v === "number") return v;
-  if (typeof v !== "string") return null;
-  const n = Number(v.replace(/\$/g,"").replace(",",".").trim());
-  return Number.isFinite(n) ? n : null;
-};
-
-// ===== Auth rutas protegidas =====
-async function authHybrid(req, res, next){
-  // Bearer: tu JWT emitido en /oauth/token
-  const auth = req.headers.authorization || "";
-  if (auth.startsWith("Bearer ")) {
-    try {
-      const payload = jwt.verify(auth.slice(7).trim(), JWT_SECRET);
-      if (payload?.user?.sub) {
-        req.user = { userId: payload.user.sub, email: payload.user.email || null, name: payload.user.name || null };
-        return next();
-      }
-    } catch (_) {}
-  }
-  // Fallback x-api-key (admin/POC)
-  if (req.headers["x-api-key"] === API_KEY) {
-    req.user = { userId: "service-admin", email: "service@local" };
-    return next();
-  }
-  return res.status(401).json({ error: "No autorizado (Bearer JWT o x-api-key)" });
-}
+// ===== Modelos están en /models/index.js =====
 
 // ===== Salud =====
 app.get("/", (_req,res)=>res.send("✅ OAuth Provider + Finance API activo"));
@@ -223,12 +192,35 @@ authRouter.post("/oauth/token", express.urlencoded({ extended: true }), async (r
 
     const profile = await userInfoResponse.json();
 
-    // Aquí puedes crear/encontrar usuario en tu DB si lo necesitas
-    // const user = await findOrCreateUser(profile);
+    // Crear o actualizar usuario en la base de datos
+    let user = await User.findOne({ googleId: profile.sub });
 
-    // Generar JWT access token
+    if (!user) {
+      // Usuario nuevo - crear
+      user = await User.create({
+        email: profile.email,
+        name: profile.name || profile.email,
+        googleId: profile.sub,
+        picture: profile.picture,
+        locale: profile.locale || 'en',
+        isActive: true
+      });
+      console.log('✅ New user created:', user.email);
+    } else {
+      // Usuario existente - actualizar información
+      user.email = profile.email;
+      user.name = profile.name || user.name;
+      user.picture = profile.picture || user.picture;
+      user.locale = profile.locale || user.locale;
+      await user.save();
+      console.log('✅ Existing user updated:', user.email);
+    }
+
+    // Generar JWT access token con userId de MongoDB
     const accessToken = jwt.sign(
       {
+        userId: user._id.toString(),
+        email: user.email,
         user: {
           sub: profile.sub,
           email: profile.email,
@@ -243,6 +235,8 @@ authRouter.post("/oauth/token", express.urlencoded({ extended: true }), async (r
 
     const refreshToken = jwt.sign(
       {
+        userId: user._id.toString(),
+        email: user.email,
         user: { sub: profile.sub },
         iss: 'freedumb-finance',
         aud: 'chatgpt-actions'
@@ -274,57 +268,9 @@ authRouter.post("/oauth/token", express.urlencoded({ extended: true }), async (r
 app.use("/auth", authRouter);
 
 // ================== API DE NEGOCIO ==================
-app.post("/api/v1/transactions", authHybrid, async (req, res) => {
-  try {
-    const userId = req.user?.userId;
-    if (!userId) return res.status(401).json({ error: "No autorizado" });
-    let { type, amount, card, description, categoryId, date } = req.body;
-
-    const map = { expense: "gasto", income: "ingreso" };
-    const t = (type || "").toLowerCase();
-    type = ["gasto","ingreso"].includes(t) ? t : (map[t] || "gasto");
-
-    const amt = normalizeAmount(amount);
-    if (amt === null || amt < 0) return res.status(400).json({ error: "amount inválido" });
-
-    const tx = await Transaction.create({
-      userId, type, amount: amt, card: card || undefined,
-      description: description || (type === "gasto" ? "Gasto reportado por usuario" : "Ingreso reportado por usuario"),
-      categoryId: categoryId || undefined,
-      date: date ? new Date(date) : undefined
-    });
-
-    res.status(201).json({ message: "Transacción registrada", data: tx });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "Error al registrar transacción" });
-  }
-});
-
-app.get("/api/v1/transactions", authHybrid, async (req, res) => {
-  try {
-    const userId = req.user?.userId;
-    if (!userId) return res.status(401).json({ error: "No autorizado" });
-
-    const { type, limit } = req.query;
-    const q = { userId };
-    if (type && ["gasto","ingreso"].includes(String(type).toLowerCase())) q.type = String(type).toLowerCase();
-
-    const lim = Math.min(Math.max(parseInt(limit || "100", 10), 1), 500);
-    const txs = await Transaction.find(q).sort({ date: -1 }).limit(lim);
-
-    const totals = txs.reduce((a,t)=> (t.type==="gasto"?(a.gastos+=t.amount):(a.ingresos+=t.amount), a), {gastos:0, ingresos:0});
-
-    res.json({
-      total: txs.length,
-      totals: { gastos: +totals.gastos.toFixed(2), ingresos: +totals.ingresos.toFixed(2), balance: +(totals.ingresos - totals.gastos).toFixed(2) },
-      transactions: txs.map(t => ({ date: t.date, type: t.type, amount: t.amount, card: t.card||null, description: t.description||null, categoryId: t.categoryId||null }))
-    });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "Error al obtener transacciones" });
-  }
-});
+// Montar rutas de transacciones con prefijo /api
+const API_PREFIX = process.env.API_PREFIX || '/api';
+app.use(API_PREFIX, transactionRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server on :${PORT}`));

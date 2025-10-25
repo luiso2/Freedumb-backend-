@@ -1,78 +1,93 @@
-// middleware/auth.js
+const jwt = require('jsonwebtoken');
 const { User } = require('../models');
 
-// API Key authentication middleware
-const authenticateApiKey = async (req, res, next) => {
+/**
+ * Middleware para validar JWT token
+ */
+async function authenticateToken(req, res, next) {
   try {
-    const apiKey = req.headers['x-api-key'] || req.headers['authorization'];
-    
-    if (!apiKey) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+      console.log('❌ No token provided');
       return res.status(401).json({
         success: false,
-        error: 'Unauthorized',
-        message: 'API key is required'
+        error: 'Authentication required',
+        code: 'NO_TOKEN'
       });
     }
 
-    // For now, use the hardcoded API key and test user
-    if (apiKey === 'a11f82a9e99991af3e04c87268513cd48ba812e5227896001cf08e4259393703') {
-      // Find or create the test user
-      let user = await User.findOne({ email: 'test@freedumb.com' });
-      
-      if (!user) {
-        // Create test user if it doesn't exist
-        user = await User.create({
-          name: 'Test User',
-          email: 'test@freedumb.com',
-          username: 'testuser',
-          password: '$2b$10$YourHashedPasswordHere',
-          role: 'user',
-          apiKey: apiKey
+    const JWT_SECRET = process.env.JWT_SECRET;
+    if (!JWT_SECRET) {
+      console.error('❌ JWT_SECRET not configured');
+      return res.status(500).json({
+        success: false,
+        error: 'Server configuration error',
+        code: 'CONFIG_ERROR'
+      });
+    }
+
+    jwt.verify(token, JWT_SECRET, async (err, decoded) => {
+      if (err) {
+        console.log('❌ Invalid token:', err.message);
+        return res.status(403).json({
+          success: false,
+          error: 'Invalid or expired token',
+          code: 'INVALID_TOKEN'
         });
       }
-      
-      req.user = user;
-      req.userId = user._id;
-      next();
-    } else {
-      return res.status(401).json({
-        success: false,
-        error: 'Unauthorized',
-        message: 'Invalid API key'
-      });
-    }
+
+      try {
+        const user = await User.findOne({ 
+          $or: [
+            { _id: decoded.userId },
+            { email: decoded.email }
+          ]
+        });
+
+        if (!user) {
+          console.log('❌ User not found:', decoded.email || decoded.userId);
+          return res.status(404).json({
+            success: false,
+            error: 'User not found',
+            code: 'USER_NOT_FOUND'
+          });
+        }
+
+        if (!user.isActive) {
+          console.log('❌ User inactive:', decoded.email);
+          return res.status(403).json({
+            success: false,
+            error: 'User account is inactive',
+            code: 'USER_INACTIVE'
+          });
+        }
+
+        req.user = user;
+        req.userId = user._id.toString();
+        
+        console.log('✅ Authenticated user:', user.email);
+        next();
+
+      } catch (dbError) {
+        console.error('❌ Database error:', dbError);
+        return res.status(500).json({
+          success: false,
+          error: 'Database error',
+          code: 'DB_ERROR'
+        });
+      }
+    });
+
   } catch (error) {
-    console.error('Auth middleware error:', error);
-    return res.status(500).json({
+    console.error('❌ Auth middleware error:', error);
+    res.status(500).json({
       success: false,
-      error: 'Internal Server Error',
-      message: 'Authentication failed'
+      error: 'Authentication error',
+      code: 'AUTH_ERROR'
     });
   }
-};
+}
 
-// Optional auth - doesn't fail if no API key
-const optionalAuth = async (req, res, next) => {
-  try {
-    const apiKey = req.headers['x-api-key'] || req.headers['authorization'];
-    
-    if (apiKey === 'a11f82a9e99991af3e04c87268513cd48ba812e5227896001cf08e4259393703') {
-      let user = await User.findOne({ email: 'test@freedumb.com' });
-      
-      if (user) {
-        req.user = user;
-        req.userId = user._id;
-      }
-    }
-    
-    next();
-  } catch (error) {
-    console.error('Optional auth error:', error);
-    next();
-  }
-};
-
-module.exports = {
-  authenticateApiKey,
-  optionalAuth
-};
+module.exports = { authenticateToken };
