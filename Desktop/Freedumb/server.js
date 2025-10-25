@@ -2,324 +2,300 @@ import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
-import session from "express-session";
-import passport from "./config/passport.js";
-import authRoutes from "./routes/auth.js";
+import jwt from "jsonwebtoken";
 
 dotenv.config();
 
 const app = express();
-
-// ===== Middleware =====
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// Session configuration for Passport
-app.use(
-  session({
-    secret: process.env.JWT_SECRET || 'your-session-secret',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: process.env.NODE_ENV === 'production', // true in production (HTTPS)
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
-  })
-);
+// ====== ENV REQUERIDAS ======
+const {
+  MONGODB_URI,
+  RAILWAY_MONGODB_URL,
+  // Google OAuth (tu app de Google)
+  GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_SECRET,
+  // Callback en tu backend para recibir Google
+  OAUTH_CALLBACK_URL, // ej: https://backend-production-d153.up.railway.app/oauth/callback
+  // Credenciales del "cliente" que configuras en ChatGPT Builder (NO son las de Google)
+  ACTION_CLIENT_ID,     // inventado por ti, p.ej. "chatgpt-actions"
+  ACTION_CLIENT_SECRET, // inventado por ti, p.ej. "chatgpt-actions-secret"
+  // Redirect que usa ChatGPT (fijo)
+  ACTION_REDIRECT_URI = "https://chat.openai.com/aip/g-oauth/callback",
+  // Firma de tus JWT
+  JWT_SECRET,
+  // Fallback para pruebas/admin
+  API_KEY
+} = process.env;
 
-// Initialize Passport
-app.use(passport.initialize());
-app.use(passport.session());
+// ====== MONGO ======
+const mongoUri = MONGODB_URI || RAILWAY_MONGODB_URL;
+if (!mongoUri) console.warn("⚠️  Configura MONGODB_URI o RAILWAY_MONGODB_URL");
+mongoose.connect(mongoUri, { autoIndex: true })
+  .then(() => console.log("✅ MongoDB conectado"))
+  .catch(err => console.error("❌ Mongo error:", err));
 
-// ===== MongoDB Connection =====
-const mongoUri = process.env.MONGODB_URI || process.env.RAILWAY_MONGODB_URL;
-if (!mongoUri) {
-  console.error("❌ ERROR: No se encontró MONGODB_URI. Configura la variable de entorno.");
-  process.exit(1);
-}
-
-mongoose
-  .connect(mongoUri, {
-    autoIndex: true,
-    serverSelectionTimeoutMS: 5000,
-  })
-  .then(() => console.log("✅ Conectado a MongoDB exitosamente"))
-  .catch((err) => {
-    console.error("❌ Error conectando a MongoDB:", err.message);
-    process.exit(1);
-  });
-
-// ===== Models (Simple Schema for Backward Compatibility) =====
-const transactionSchema = new mongoose.Schema(
-  {
-    type: {
-      type: String,
-      enum: ["gasto", "ingreso"],
-      required: true
-    },
-    amount: {
-      type: Number,
-      required: true,
-      min: [0, "El monto no puede ser negativo"]
-    },
-    card: {
-      type: String,
-      default: null
-    },
-    description: {
-      type: String,
-      default: null
-    },
-    category: {
-      type: String,
-      default: null
-    },
-    date: {
-      type: Date,
-      default: Date.now
-    }
-  },
-  {
-    timestamps: true
-  }
-);
-
+// ====== MODELOS ======
+const transactionSchema = new mongoose.Schema({
+  userId: { type: String, required: true }, // guardamos Google "sub" como string
+  type: { type: String, enum: ["gasto","ingreso"], required: true },
+  amount: { type: Number, required: true, min: 0 },
+  card: String,
+  description: String,
+  categoryId: String,
+  date: { type: Date, default: Date.now }
+}, { timestamps: true });
 const Transaction = mongoose.model("Transaction", transactionSchema);
 
-// ===== Helper Functions =====
-const normalizeAmount = (val) => {
+// ====== MEMORIA: AUTH CODES EFÍMEROS PARA EL INTERCAMBIO ======
+const authCodeStore = new Map(); // code -> { access_token, scope, expAt }
+function makeRandom(n=48){
+  const chars="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let s=""; for(let i=0;i<n;i++) s+=chars[Math.floor(Math.random()*chars.length)];
+  return s;
+}
+
+// ====== HELPERS ======
+function normalizeAmount(val){
   if (typeof val === "number") return val;
   if (typeof val !== "string") return null;
-  const cleaned = val.replace(/\$/g, "").trim().replace(",", ".");
+  const cleaned = val.replace(/\$/g,"").trim().replace(",",".");
   const n = Number(cleaned);
-  return Number.isFinite(n) && n >= 0 ? n : null;
-};
+  return Number.isFinite(n) ? n : null;
+}
 
-// ===== API Key Authentication =====
-const authenticateApiKey = (req, res, next) => {
-  const apiKey = req.headers["x-api-key"];
-  if (!apiKey || apiKey !== process.env.API_KEY) {
-    return res.status(401).json({ error: "API Key inválida o no proporcionada" });
-  }
-  next();
-};
-
-// ===== Routes =====
-
-// Health check (sin autenticación)
-app.get("/", (req, res) => {
-  res.json({
-    status: "ok",
-    message: "✅ Finance Agent API activa",
-    timestamp: new Date().toISOString(),
-    version: "2.0.0",
-    endpoints: {
-      simple: {
-        "POST /transactions": "Crear transacción (compatible con ChatGPT)",
-        "GET /transactions": "Listar transacciones (compatible con ChatGPT)",
-        "GET /summary": "Resumen financiero (compatible con ChatGPT)",
-        "DELETE /transactions/:id": "Eliminar transacción"
-      },
-      api: {
-        "POST /api/auth/login": "Login de usuario",
-        "POST /api/auth/register": "Registro de usuario",
-        "GET /api/auth/google": "Iniciar OAuth con Google",
-        "GET /api/auth/google/callback": "Callback de Google OAuth",
-        "POST /api/auth/refresh": "Refrescar token",
-        "POST /api/auth/logout": "Logout de usuario",
-        "POST /api/transactions": "Crear transacción (nueva API)",
-        "GET /api/transactions": "Listar transacciones (nueva API)",
-        "GET /api/summary": "Resumen financiero (nueva API)",
-        "GET /api/categories": "Gestión de categorías",
-        "GET /api/accounts": "Gestión de cuentas"
+// ====== AUTH DE RUTAS PROTEGIDAS ======
+async function authHybrid(req, res, next){
+  // 1) Bearer de TU sistema (JWT emitido en /oauth/token)
+  const auth = req.headers.authorization || "";
+  if (auth.startsWith("Bearer ")) {
+    const token = auth.slice(7).trim();
+    try {
+      const payload = jwt.verify(token, JWT_SECRET);
+      if (payload?.user?.sub) {
+        req.user = { userId: payload.user.sub, email: payload.user.email || null, name: payload.user.name || null };
+        return next();
       }
-    }
-  });
-});
+    } catch (e) { /* sigue a x-api-key */ }
+  }
+  // 2) Fallback x-api-key (admin/POC)
+  const key = req.headers["x-api-key"];
+  if (key && key === API_KEY) {
+    req.user = { userId: "service-admin", email: "service@local" };
+    return next();
+  }
+  return res.status(401).json({ error: "No autorizado (Bearer JWT o x-api-key)" });
+}
 
-// API Documentation
-app.get("/api-docs", (req, res) => {
-  res.json({
-    name: "Freedumb Finance API",
-    version: "2.0.0",
-    description: "API para gestión financiera con soporte para ChatGPT Actions",
-    authentication: {
-      type: "API Key",
-      header: "x-api-key",
-      value: "Incluir en headers de cada request"
-    },
-    endpoints: {
-      legacy: "Endpoints simples compatibles con ChatGPT (/transactions, /summary)",
-      modern: "Endpoints modulares con más funcionalidad (/api/*)"
-    }
-  });
-});
+// ====== HEALTH ======
+app.get("/", (_,res)=>res.send("✅ Backend OAuth Provider + Finance API activo"));
 
-// ===== LEGACY ENDPOINTS (Compatible con ChatGPT Actions) =====
+// ============================================================
+// ===============  PROVEEDOR OAUTH PARA CHATGPT  =============
+// ============================================================
+//
+// FLUJO:
+// ChatGPT -> GET /oauth/authorize (con client_id del Action, redirect_uri=chat.openai.com, scope, state)
+// Backend  -> redirige a Google OAuth
+// Google   -> vuelve a /oauth/callback con ?code
+// Backend  -> canjea code en Google, obtiene perfil, emite JWT propio
+// Backend  -> genera un "authorization code" efímero y redirige a ChatGPT con ?code=&state=
+// ChatGPT  -> POST /oauth/token (grant_type=authorization_code, code, client_id/secret del Action)
+// Backend  -> valida code efímero y devuelve {access_token, token_type, expires_in, scope}
 
-// POST /transactions - Crear transacción (compatible con ChatGPT)
-app.post("/transactions", authenticateApiKey, async (req, res) => {
+app.get("/oauth/authorize", async (req, res) => {
   try {
-    let { type, amount, card, description, category, date } = req.body;
+    const { response_type, client_id, redirect_uri, scope, state } = req.query;
 
-    // Validaciones
-    if (!type) type = "gasto";
-    if (!["gasto", "ingreso"].includes(type)) {
-      return res.status(400).json({ error: "type debe ser 'gasto' o 'ingreso'" });
-    }
+    // Validaciones mínimas de cliente y redirect
+    if (response_type !== "code") return res.status(400).send("response_type debe ser 'code'");
+    if (client_id !== ACTION_CLIENT_ID) return res.status(401).send("client_id inválido");
+    if (redirect_uri !== ACTION_REDIRECT_URI) return res.status(400).send("redirect_uri no permitido");
 
-    const normAmount = normalizeAmount(amount);
-    if (normAmount === null) {
-      return res.status(400).json({ error: "amount inválido o negativo" });
-    }
-
-    // Crear payload
-    const payload = {
-      type,
-      amount: normAmount,
-      card: card || null,
-      description: description || (type === "gasto" ? "Gasto sin descripción" : "Ingreso sin descripción"),
-      category: category || null,
-      date: date ? new Date(date) : new Date()
-    };
-
-    const transaction = await Transaction.create(payload);
-
-    return res.status(201).json({
-      message: "Transacción registrada exitosamente",
-      data: transaction
+    // Redirige a Google OAuth
+    const params = new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      redirect_uri: OAUTH_CALLBACK_URL,        // callback de TU backend
+      response_type: "code",
+      scope: scope || "openid email profile",
+      access_type: "online",
+      include_granted_scopes: "true",
+      state: encodeURIComponent(state || "")   // preservamos state de ChatGPT
     });
-  } catch (err) {
-    console.error("POST /transactions error:", err);
-    return res.status(500).json({
-      error: "Error al registrar transacción",
-      details: err.message
-    });
+    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+    return res.redirect(302, googleAuthUrl);
+  } catch (e) {
+    console.error("GET /oauth/authorize error:", e);
+    return res.status(500).send("OAuth authorize error");
   }
 });
 
-// GET /transactions - Listar transacciones (compatible con ChatGPT)
-app.get("/transactions", authenticateApiKey, async (req, res) => {
+// Recibe el code de Google, emite authorization code efímero para ChatGPT
+app.get("/oauth/callback", async (req, res) => {
   try {
-    const { type, limit, category } = req.query;
+    const { code, state } = req.query;
+    if (!code) return res.status(400).send("Falta code");
 
-    // Construir filtros
-    const query = {};
-    if (type && ["gasto", "ingreso"].includes(type)) {
-      query.type = type;
-    }
-    if (category) {
-      query.category = category;
-    }
-
-    // Limitar resultados (máximo 500)
-    const limitNum = Math.min(Math.max(parseInt(limit || "500", 10), 1), 500);
-
-    const transactions = await Transaction
-      .find(query)
-      .sort({ date: -1 })
-      .limit(limitNum);
-
-    return res.json({
-      total: transactions.length,
-      transactions: transactions.map(t => ({
-        _id: t._id.toString(),
-        type: t.type,
-        amount: t.amount,
-        card: t.card,
-        description: t.description,
-        category: t.category,
-        date: t.date.toISOString()
-      }))
+    // Intercambia code por tokens de Google
+    const body = new URLSearchParams({
+      code,
+      client_id: GOOGLE_CLIENT_ID,
+      client_secret: GOOGLE_CLIENT_SECRET,
+      redirect_uri: OAUTH_CALLBACK_URL,
+      grant_type: "authorization_code"
     });
-  } catch (err) {
-    console.error("GET /transactions error:", err);
-    return res.status(500).json({
-      error: "Error al obtener transacciones",
-      details: err.message
+
+    const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body
     });
-  }
-});
+    if (!tokenResp.ok) {
+      const txt = await tokenResp.text();
+      console.error("Token Google error:", txt);
+      return res.status(500).send("Error token Google");
+    }
+    const tokens = await tokenResp.json(); // {access_token, id_token, ...}
 
-// GET /summary - Resumen financiero (compatible con ChatGPT)
-app.get("/summary", authenticateApiKey, async (req, res) => {
-  try {
-    const transactions = await Transaction.find({});
+    // Obtiene perfil (USERINFO)
+    const uiResp = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${tokens.access_token}` }
+    });
+    const profile = await uiResp.json(); // {sub, email, name, picture,...}
 
-    const summary = transactions.reduce(
-      (acc, t) => {
-        if (t.type === "gasto") {
-          acc.totalGastos += t.amount;
-        } else if (t.type === "ingreso") {
-          acc.totalIngresos += t.amount;
-        }
-        return acc;
-      },
-      { totalGastos: 0, totalIngresos: 0 }
+    // Emite TU JWT (30 días) con el sub/email
+    const myAccessToken = jwt.sign(
+      { user: { sub: profile.sub, email: profile.email, name: profile.name } },
+      JWT_SECRET,
+      { expiresIn: "30d" }
     );
 
-    summary.balance = summary.totalIngresos - summary.totalGastos;
-
-    // Redondear a 2 decimales
-    summary.totalGastos = Number(summary.totalGastos.toFixed(2));
-    summary.totalIngresos = Number(summary.totalIngresos.toFixed(2));
-    summary.balance = Number(summary.balance.toFixed(2));
-
-    return res.json(summary);
-  } catch (err) {
-    console.error("GET /summary error:", err);
-    return res.status(500).json({
-      error: "Error al calcular resumen",
-      details: err.message
+    // Genera authorization code efímero que ChatGPT canjeará en /oauth/token
+    const oneTimeCode = makeRandom(48);
+    const expAt = Date.now() + 2 * 60 * 1000; // 2 minutos
+    authCodeStore.set(oneTimeCode, {
+      access_token: myAccessToken,
+      scope: "openid email profile",
+      expAt
     });
+
+    // Redirige a ChatGPT con code+state original
+    const finalRedirect = new URL(ACTION_REDIRECT_URI);
+    finalRedirect.searchParams.set("code", oneTimeCode);
+    if (state) finalRedirect.searchParams.set("state", state);
+    return res.redirect(302, finalRedirect.toString());
+  } catch (e) {
+    console.error("GET /oauth/callback error:", e);
+    return res.status(500).send("OAuth callback error");
   }
 });
 
-// DELETE /transactions/:id - Eliminar transacción (compatible con ChatGPT)
-app.delete("/transactions/:id", authenticateApiKey, async (req, res) => {
+// Intercambia authorization code efímero por access_token (TU JWT)
+app.post("/oauth/token", express.urlencoded({ extended: true }), async (req, res) => {
   try {
-    const { id } = req.params;
+    const { grant_type, code, redirect_uri, client_id, client_secret } = req.body;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "ID inválido" });
+    if (grant_type !== "authorization_code") {
+      return res.status(400).json({ error: "unsupported_grant_type" });
+    }
+    if (client_id !== ACTION_CLIENT_ID || client_secret !== ACTION_CLIENT_SECRET) {
+      return res.status(401).json({ error: "invalid_client" });
+    }
+    if (redirect_uri !== ACTION_REDIRECT_URI) {
+      return res.status(400).json({ error: "invalid_request", error_description: "redirect_uri inválido" });
     }
 
-    const deleted = await Transaction.findByIdAndDelete(id);
-
-    if (!deleted) {
-      return res.status(404).json({ error: "Transacción no encontrada" });
+    const entry = authCodeStore.get(code);
+    if (!entry) return res.status(400).json({ error: "invalid_grant" });
+    if (Date.now() > entry.expAt) {
+      authCodeStore.delete(code);
+      return res.status(400).json({ error: "expired_code" });
     }
+    // one-time use
+    authCodeStore.delete(code);
 
     return res.json({
-      message: "Transacción eliminada exitosamente",
-      data: deleted
+      access_token: entry.access_token,
+      token_type: "Bearer",
+      expires_in: 30 * 24 * 60 * 60, // 30 días
+      scope: entry.scope
     });
-  } catch (err) {
-    console.error("DELETE /transactions/:id error:", err);
-    return res.status(500).json({
-      error: "Error al eliminar transacción",
-      details: err.message
+  } catch (e) {
+    console.error("POST /oauth/token error:", e);
+    return res.status(500).json({ error: "server_error" });
+  }
+});
+//
+// =================  FIN PROVEEDOR OAUTH  ====================
+
+// ====== RUTAS DE NEGOCIO PROTEGIDAS ======
+app.post("/transactions", authHybrid, async (req, res) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ error: "No autorizado" });
+
+    let { type, amount, card, description, categoryId, date } = req.body;
+
+    // acepta "gasto/ingreso" y también "expense/income"
+    const map = { expense: "gasto", income: "ingreso" };
+    const t = (type || "").toLowerCase();
+    type = ["gasto","ingreso"].includes(t) ? t : (map[t] || "gasto");
+
+    const amt = normalizeAmount(amount);
+    if (amt === null || amt < 0) return res.status(400).json({ error: "amount inválido" });
+
+    const tx = await Transaction.create({
+      userId, type, amount: amt, card: card || undefined,
+      description: description || (type === "gasto" ? "Gasto reportado por usuario" : "Ingreso reportado por usuario"),
+      categoryId: categoryId || undefined,
+      date: date ? new Date(date) : undefined
     });
+
+    return res.status(201).json({ message: "Transacción registrada", data: tx });
+  } catch (e) {
+    console.error("POST /transactions error:", e);
+    return res.status(500).json({ error: "Error al registrar transacción" });
   }
 });
 
-// ===== MODERN API ENDPOINTS (/api/*) =====
+app.get("/transactions", authHybrid, async (req, res) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ error: "No autorizado" });
 
-// Auth routes (login, register, refresh, logout)
-app.use("/api/auth", authRoutes);
+    const { type, limit } = req.query;
+    const q = { userId };
+    if (type && ["gasto","ingreso"].includes(String(type).toLowerCase())) q.type = String(type).toLowerCase();
 
-// TODO: Importar otras rutas modulares cuando estén listas con ES modules
+    const lim = Math.min(Math.max(parseInt(limit || "100", 10), 1), 500);
+    const txs = await Transaction.find(q).sort({ date: -1 }).limit(lim);
 
-// ===== Server Start =====
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor escuchando en http://localhost:${PORT}`);
-  console.log(`📊 Endpoints disponibles:`);
-  console.log(`   - GET  /             (healthcheck)`);
-  console.log(`   - GET  /api-docs     (documentación)`);
-  console.log(`   - POST /transactions (crear - ChatGPT compatible)`);
-  console.log(`   - GET  /transactions (listar - ChatGPT compatible)`);
-  console.log(`   - GET  /summary      (resumen - ChatGPT compatible)`);
-  console.log(`   - DELETE /transactions/:id (eliminar)`);
+    const totals = txs.reduce((acc, t) => {
+      if (t.type === "gasto") acc.gastos += t.amount;
+      else acc.ingresos += t.amount;
+      return acc;
+    }, { gastos: 0, ingresos: 0 });
+
+    return res.json({
+      total: txs.length,
+      totals: {
+        gastos: Number(totals.gastos.toFixed(2)),
+        ingresos: Number(totals.ingresos.toFixed(2)),
+        balance: Number((totals.ingresos - totals.gastos).toFixed(2))
+      },
+      transactions: txs.map(t => ({
+        date: t.date, type: t.type, amount: t.amount,
+        card: t.card || null, description: t.description || null, categoryId: t.categoryId || null
+      }))
+    });
+  } catch (e) {
+    console.error("GET /transactions error:", e);
+    return res.status(500).json({ error: "Error al obtener transacciones" });
+  }
 });
+
+// ====== START ======
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Server on :${PORT}`));
