@@ -10,7 +10,15 @@ const app = express();
 // ===== Middleware =====
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+// ===== API Key Security =====
+const authenticateApiKey = (req, res, next) => {
+  const apiKey = req.headers["x-api-key"];
+  if (!apiKey || apiKey !== process.env.API_KEY) {
+    return res.status(401).json({ error: "API Key inválida o no proporcionada" });
+  }
+  next();
+};
 
 // ===== MongoDB Connection =====
 const mongoUri = process.env.MONGODB_URI || process.env.RAILWAY_MONGODB_URL;
@@ -30,7 +38,7 @@ mongoose
     process.exit(1);
   });
 
-// ===== Models (Simple Schema for Backward Compatibility) =====
+// ===== Schema & Model =====
 const transactionSchema = new mongoose.Schema(
   {
     type: {
@@ -76,69 +84,30 @@ const normalizeAmount = (val) => {
   return Number.isFinite(n) && n >= 0 ? n : null;
 };
 
-// ===== API Key Authentication =====
-const authenticateApiKey = (req, res, next) => {
-  const apiKey = req.headers["x-api-key"];
-  if (!apiKey || apiKey !== process.env.API_KEY) {
-    return res.status(401).json({ error: "API Key inválida o no proporcionada" });
-  }
-  next();
-};
-
 // ===== Routes =====
 
-// Health check (sin autenticación)
+// Healthcheck (sin autenticación)
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
     message: "✅ Finance Agent API activa",
-    timestamp: new Date().toISOString(),
-    version: "2.0.0",
-    endpoints: {
-      simple: {
-        "POST /transactions": "Crear transacción (compatible con ChatGPT)",
-        "GET /transactions": "Listar transacciones (compatible con ChatGPT)",
-        "GET /summary": "Resumen financiero (compatible con ChatGPT)",
-        "DELETE /transactions/:id": "Eliminar transacción"
-      },
-      api: {
-        "POST /api/transactions": "Crear transacción (nueva API)",
-        "GET /api/transactions": "Listar transacciones (nueva API)",
-        "GET /api/summary": "Resumen financiero (nueva API)",
-        "GET /api/categories": "Gestión de categorías",
-        "GET /api/accounts": "Gestión de cuentas"
-      }
-    }
+    timestamp: new Date().toISOString()
   });
 });
 
-// API Documentation
-app.get("/api-docs", (req, res) => {
-  res.json({
-    name: "Freedumb Finance API",
-    version: "2.0.0",
-    description: "API para gestión financiera con soporte para ChatGPT Actions",
-    authentication: {
-      type: "API Key",
-      header: "x-api-key",
-      value: "Incluir en headers de cada request"
-    },
-    endpoints: {
-      legacy: "Endpoints simples compatibles con ChatGPT (/transactions, /summary)",
-      modern: "Endpoints modulares con más funcionalidad (/api/*)"
-    }
-  });
-});
+// Todos los endpoints siguientes requieren API Key
+app.use("/transactions", authenticateApiKey);
+app.use("/summary", authenticateApiKey);
 
-// ===== LEGACY ENDPOINTS (Compatible con ChatGPT Actions) =====
-
-// POST /transactions - Crear transacción (compatible con ChatGPT)
-app.post("/transactions", authenticateApiKey, async (req, res) => {
+// POST /transactions - Crear nueva transacción
+app.post("/transactions", async (req, res) => {
   try {
     let { type, amount, card, description, category, date } = req.body;
 
     // Validaciones
-    if (!type) type = "gasto";
+    if (!type) {
+      type = "gasto";
+    }
     if (!["gasto", "ingreso"].includes(type)) {
       return res.status(400).json({ error: "type debe ser 'gasto' o 'ingreso'" });
     }
@@ -173,8 +142,8 @@ app.post("/transactions", authenticateApiKey, async (req, res) => {
   }
 });
 
-// GET /transactions - Listar transacciones (compatible con ChatGPT)
-app.get("/transactions", authenticateApiKey, async (req, res) => {
+// GET /transactions - Listar todas las transacciones
+app.get("/transactions", async (req, res) => {
   try {
     const { type, limit, category } = req.query;
 
@@ -216,8 +185,8 @@ app.get("/transactions", authenticateApiKey, async (req, res) => {
   }
 });
 
-// GET /summary - Resumen financiero (compatible con ChatGPT)
-app.get("/summary", authenticateApiKey, async (req, res) => {
+// GET /summary - Obtener resumen financiero
+app.get("/summary", async (req, res) => {
   try {
     const transactions = await Transaction.find({});
 
@@ -250,7 +219,7 @@ app.get("/summary", authenticateApiKey, async (req, res) => {
   }
 });
 
-// DELETE /transactions/:id - Eliminar transacción (compatible con ChatGPT)
+// DELETE /transactions/:id - Eliminar transacción (útil para el agente)
 app.delete("/transactions/:id", authenticateApiKey, async (req, res) => {
   try {
     const { id } = req.params;
@@ -278,18 +247,14 @@ app.delete("/transactions/:id", authenticateApiKey, async (req, res) => {
   }
 });
 
-// ===== MODERN API ENDPOINTS (/api/*) =====
-// TODO: Importar rutas modulares cuando estén listas con ES modules
-
 // ===== Server Start =====
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Servidor escuchando en http://localhost:${PORT}`);
   console.log(`📊 Endpoints disponibles:`);
   console.log(`   - GET  /             (healthcheck)`);
-  console.log(`   - GET  /api-docs     (documentación)`);
-  console.log(`   - POST /transactions (crear - ChatGPT compatible)`);
-  console.log(`   - GET  /transactions (listar - ChatGPT compatible)`);
-  console.log(`   - GET  /summary      (resumen - ChatGPT compatible)`);
+  console.log(`   - POST /transactions (crear)`);
+  console.log(`   - GET  /transactions (listar)`);
+  console.log(`   - GET  /summary      (resumen)`);
   console.log(`   - DELETE /transactions/:id (eliminar)`);
 });
