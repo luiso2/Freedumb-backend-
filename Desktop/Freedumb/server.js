@@ -70,9 +70,11 @@ async function authHybrid(req, res, next){
 app.get("/", (_req,res)=>res.send("✅ OAuth Provider + Finance API activo"));
 
 // ================== PROVEEDOR OAUTH ==================
+// Create auth router and mount at /auth
+const authRouter = express.Router();
 
-// 1) ChatGPT → /oauth/authorize
-app.get("/oauth/authorize", (req, res) => {
+// 1) ChatGPT → /auth/oauth/authorize
+authRouter.get("/oauth/authorize", (req, res) => {
   const { response_type, client_id, redirect_uri, scope, state } = req.query;
 
   console.log(`OAuth authorize request - client_id: ${client_id}, redirect_uri: ${redirect_uri}`);
@@ -130,8 +132,8 @@ app.get("/oauth/authorize", (req, res) => {
   res.redirect(googleAuthUrl.toString());
 });
 
-// 2) ChatGPT → /oauth/token (intercambia code por access token)
-app.post("/oauth/token", express.urlencoded({ extended: true }), async (req, res) => {
+// 2) ChatGPT → /auth/oauth/token (intercambia code por access token)
+authRouter.post("/oauth/token", express.urlencoded({ extended: true }), async (req, res) => {
   try {
     const { grant_type, code, redirect_uri, client_id, client_secret } = req.body;
 
@@ -267,6 +269,9 @@ app.post("/oauth/token", express.urlencoded({ extended: true }), async (req, res
     });
   }
 });
+
+// Mount auth router at /auth
+app.use("/auth", authRouter);
 
 // ================== API DE NEGOCIO ==================
 app.post("/api/v1/transactions", authHybrid, async (req, res) => {
