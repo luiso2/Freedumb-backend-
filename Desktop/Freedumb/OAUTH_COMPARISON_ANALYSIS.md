@@ -246,8 +246,8 @@ if (client_id !== GOOGLE_CLIENT_ID || client_secret !== GOOGLE_CLIENT_SECRET)
 ## 📋 CONFIGURACIÓN DE CHATGPT BUILDER
 
 ```
-Authorization URL: https://backend-production-d153.up.railway.app/oauth/authorize
-Token URL: https://backend-production-d153.up.railway.app/oauth/token
+Authorization URL: https://backend-production-d153.up.railway.app/auth/oauth/authorize
+Token URL: https://backend-production-d153.up.railway.app/auth/oauth/token
 Client ID: YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com
 Client Secret: YOUR_GOOGLE_CLIENT_SECRET
 Scope: openid email profile

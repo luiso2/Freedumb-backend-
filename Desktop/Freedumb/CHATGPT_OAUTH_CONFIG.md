@@ -6,12 +6,12 @@ Este backend ahora funciona como un **proxy transparente** para Google OAuth, si
 
 ### Flujo OAuth:
 ```
-1. ChatGPT → /oauth/authorize
+1. ChatGPT → /auth/oauth/authorize
 2. Backend valida GOOGLE_CLIENT_ID y redirect_uri
 3. Backend redirige a Google OAuth
 4. Usuario autoriza en Google
 5. Google → ChatGPT con authorization code
-6. ChatGPT → /oauth/token con code
+6. ChatGPT → /auth/oauth/token con code
 7. Backend intercambia code con Google
 8. Backend genera JWT para ChatGPT
 9. ChatGPT usa JWT para acceder a /api/v1/transactions
@@ -24,8 +24,8 @@ Este backend ahora funciona como un **proxy transparente** para Google OAuth, si
 ### 1. OAuth Settings
 
 ```
-Authorization URL: https://backend-production-d153.up.railway.app/oauth/authorize
-Token URL: https://backend-production-d153.up.railway.app/oauth/token
+Authorization URL: https://backend-production-d153.up.railway.app/auth/oauth/authorize
+Token URL: https://backend-production-d153.up.railway.app/auth/oauth/token
 Client ID: YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com
 Client Secret: YOUR_GOOGLE_CLIENT_SECRET
 Scope: openid email profile
@@ -56,8 +56,8 @@ GOOGLE_CLIENT_SECRET=YOUR_GOOGLE_CLIENT_SECRET
 ## 🚀 Endpoints Disponibles
 
 ### OAuth Endpoints (Públicos)
-- `GET /oauth/authorize` - Inicia flujo OAuth
-- `POST /oauth/token` - Intercambia código por token
+- `GET /auth/oauth/authorize` - Inicia flujo OAuth
+- `POST /auth/oauth/token` - Intercambia código por token
 
 ### API Endpoints (Requieren Bearer JWT)
 - `POST /api/v1/transactions` - Crear transacción
@@ -81,12 +81,12 @@ curl -X GET https://backend-production-d153.up.railway.app/api/v1/transactions \
 
 ## ✅ Validaciones Implementadas
 
-### /oauth/authorize
+### /auth/oauth/authorize
 - Valida `client_id` contra `GOOGLE_CLIENT_ID`
 - Valida `redirect_uri` contra lista de URIs de ChatGPT permitidas
 - Redirige a Google con `redirect_uri` de ChatGPT
 
-### /oauth/token
+### /auth/oauth/token
 - Valida credenciales de GOOGLE (no credenciales inventadas)
 - Intercambia `code` con Google
 - Obtiene perfil de usuario
@@ -117,7 +117,7 @@ https://chatgpt.com/aip/g-acb82384ffd79c2fc2a4454695282554c7439caf/oauth/callbac
 
 ### Error 400: "Invalid redirect_uri"
 **Causa**: La redirect_uri de ChatGPT no está en la lista de URIs permitidas
-**Solución**: Agrega la URI a `validRedirectUris` en `/oauth/authorize` en server.js
+**Solución**: Agrega la URI a `validRedirectUris` en `/auth/oauth/authorize` en server.js
 
 ### Error 401: "Invalid client credentials"
 **Causa**: client_secret incorrecto en ChatGPT Builder
