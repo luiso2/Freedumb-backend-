@@ -7,8 +7,12 @@ import jwt from "jsonwebtoken";
 dotenv.config();
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: ['https://chat.openai.com', 'https://chatgpt.com', 'http://localhost:5173'],
+  credentials: true
+}));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // ====== ENV REQUERIDAS ======
 const {
@@ -49,13 +53,9 @@ const transactionSchema = new mongoose.Schema({
 }, { timestamps: true });
 const Transaction = mongoose.model("Transaction", transactionSchema);
 
-// ====== MEMORIA: AUTH CODES EFÍMEROS PARA EL INTERCAMBIO ======
-const authCodeStore = new Map(); // code -> { access_token, scope, expAt }
-function makeRandom(n=48){
-  const chars="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let s=""; for(let i=0;i<n;i++) s+=chars[Math.floor(Math.random()*chars.length)];
-  return s;
-}
+// ====== OAUTH REDIRECT URI ======
+// Variable de entorno para el redirect URI de OAuth
+const OAUTH_REDIRECT_URI = process.env.OAUTH_REDIRECT_URI || "http://localhost:3000/oauth/callback";
 
 // ====== HELPERS ======
 function normalizeAmount(val){
@@ -180,134 +180,106 @@ app.get("/auth/google/callback", async (req, res) => {
 // ============================================================
 //
 // FLUJO:
-// ChatGPT -> GET /oauth/authorize (con client_id del Action, redirect_uri=chat.openai.com, scope, state)
+// ChatGPT -> GET /oauth/authorize (con client_id, redirect_uri, state)
 // Backend  -> redirige a Google OAuth
 // Google   -> vuelve a /oauth/callback con ?code
-// Backend  -> canjea code en Google, obtiene perfil, emite JWT propio
-// Backend  -> genera un "authorization code" efímero y redirige a ChatGPT con ?code=&state=
-// ChatGPT  -> POST /oauth/token (grant_type=authorization_code, code, client_id/secret del Action)
-// Backend  -> valida code efímero y devuelve {access_token, token_type, expires_in, scope}
+// Backend  -> canjea code en Google, obtiene perfil del usuario
+// Backend  -> genera authorization code JWT y redirige a ChatGPT
+// ChatGPT  -> POST /oauth/token (grant_type=authorization_code, code)
+// Backend  -> valida JWT code y devuelve {access_token, token_type, expires_in}
 
-app.get("/oauth/authorize", async (req, res) => {
-  try {
-    const { response_type, client_id, redirect_uri, scope, state } = req.query;
+// 1. GET /oauth/authorize
+app.get('/oauth/authorize', (req, res) => {
+  const { client_id, redirect_uri, state } = req.query;
 
-    // Validaciones mínimas de cliente y redirect
-    if (response_type !== "code") return res.status(400).send("response_type debe ser 'code'");
-    if (client_id !== ACTION_CLIENT_ID) return res.status(401).send("client_id inválido");
-    if (redirect_uri !== ACTION_REDIRECT_URI) return res.status(400).send("redirect_uri no permitido");
+  const googleUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+    `client_id=${GOOGLE_CLIENT_ID}` +
+    `&redirect_uri=${encodeURIComponent(OAUTH_REDIRECT_URI)}` +
+    `&response_type=code` +
+    `&scope=openid%20email%20profile` +
+    `&state=${state}` +
+    `&access_type=offline` +
+    `&prompt=consent`;
 
-    // Redirige a Google OAuth
-    const params = new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      redirect_uri: OAUTH_CALLBACK_URL,        // callback de TU backend
-      response_type: "code",
-      scope: scope || "openid email profile",
-      access_type: "online",
-      include_granted_scopes: "true",
-      state: encodeURIComponent(state || "")   // preservamos state de ChatGPT
-    });
-    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
-    return res.redirect(302, googleAuthUrl);
-  } catch (e) {
-    console.error("GET /oauth/authorize error:", e);
-    return res.status(500).send("OAuth authorize error");
-  }
+  res.redirect(googleUrl);
 });
 
-// Recibe el code de Google, emite authorization code efímero para ChatGPT
-app.get("/oauth/callback", async (req, res) => {
+// 2. GET /oauth/callback
+app.get('/oauth/callback', async (req, res) => {
   try {
     const { code, state } = req.query;
-    if (!code) return res.status(400).send("Falta code");
 
-    // Intercambia code por tokens de Google
-    const body = new URLSearchParams({
-      code,
-      client_id: GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
-      redirect_uri: OAUTH_CALLBACK_URL,
-      grant_type: "authorization_code"
+    // Intercambiar code de Google por tokens
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        redirect_uri: OAUTH_REDIRECT_URI,
+        grant_type: 'authorization_code'
+      }).toString()
     });
 
-    const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body
-    });
-    if (!tokenResp.ok) {
-      const txt = await tokenResp.text();
-      console.error("Token Google error:", txt);
-      return res.status(500).send("Error token Google");
-    }
-    const tokens = await tokenResp.json(); // {access_token, id_token, ...}
+    const googleTokens = await tokenResponse.json();
 
-    // Obtiene perfil (USERINFO)
-    const uiResp = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-      headers: { Authorization: `Bearer ${tokens.access_token}` }
+    // Obtener info del usuario
+    const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${googleTokens.access_token}` }
     });
-    const profile = await uiResp.json(); // {sub, email, name, picture,...}
+    const userData = await userResponse.json();
 
-    // Emite TU JWT (30 días) con el sub/email
-    const myAccessToken = jwt.sign(
-      { user: { sub: profile.sub, email: profile.email, name: profile.name } },
+    // Generar authorization code para ChatGPT usando JWT
+    const authCode = jwt.sign(
+      { userId: userData.id, email: userData.email, name: userData.name, type: 'auth_code' },
       JWT_SECRET,
-      { expiresIn: "30d" }
+      { expiresIn: '10m' }
     );
 
-    // Genera authorization code efímero que ChatGPT canjeará en /oauth/token
-    const oneTimeCode = makeRandom(48);
-    const expAt = Date.now() + 2 * 60 * 1000; // 2 minutos
-    authCodeStore.set(oneTimeCode, {
-      access_token: myAccessToken,
-      scope: "openid email profile",
-      expAt
-    });
-
-    // Redirige a ChatGPT con code+state original
-    const finalRedirect = new URL(ACTION_REDIRECT_URI);
-    finalRedirect.searchParams.set("code", oneTimeCode);
-    if (state) finalRedirect.searchParams.set("state", state);
-    return res.redirect(302, finalRedirect.toString());
-  } catch (e) {
-    console.error("GET /oauth/callback error:", e);
-    return res.status(500).send("OAuth callback error");
+    // Redirigir a ChatGPT con el code
+    res.redirect(`https://chat.openai.com/aip/g-acb82384ffd79c2fc2a4454695282554c7439caf/oauth/callback?code=${authCode}&state=${state}`);
+  } catch (error) {
+    console.error('OAuth callback error:', error);
+    res.status(500).json({ error: 'server_error' });
   }
 });
 
-// Intercambia authorization code efímero por access_token (TU JWT)
-app.post("/oauth/token", express.urlencoded({ extended: true }), async (req, res) => {
+// 3. POST /oauth/token
+app.post('/oauth/token', (req, res) => {
   try {
-    const { grant_type, code, redirect_uri, client_id, client_secret } = req.body;
+    const { code, grant_type } = req.body;
 
-    if (grant_type !== "authorization_code") {
-      return res.status(400).json({ error: "unsupported_grant_type" });
-    }
-    if (client_id !== ACTION_CLIENT_ID || client_secret !== ACTION_CLIENT_SECRET) {
-      return res.status(401).json({ error: "invalid_client" });
-    }
-    if (redirect_uri !== ACTION_REDIRECT_URI) {
-      return res.status(400).json({ error: "invalid_request", error_description: "redirect_uri inválido" });
+    if (grant_type !== 'authorization_code') {
+      return res.status(400).json({ error: 'unsupported_grant_type' });
     }
 
-    const entry = authCodeStore.get(code);
-    if (!entry) return res.status(400).json({ error: "invalid_grant" });
-    if (Date.now() > entry.expAt) {
-      authCodeStore.delete(code);
-      return res.status(400).json({ error: "expired_code" });
-    }
-    // one-time use
-    authCodeStore.delete(code);
+    // Verificar el authorization code
+    const decoded = jwt.verify(code, JWT_SECRET);
 
-    return res.json({
-      access_token: entry.access_token,
-      token_type: "Bearer",
-      expires_in: 30 * 24 * 60 * 60, // 30 días
-      scope: entry.scope
+    if (decoded.type !== 'auth_code') {
+      return res.status(400).json({ error: 'invalid_grant' });
+    }
+
+    // Generar access token
+    const accessToken = jwt.sign(
+      { userId: decoded.userId, email: decoded.email, name: decoded.name, type: 'access' },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    res.json({
+      access_token: accessToken,
+      token_type: 'Bearer',
+      expires_in: 3600,
+      scope: 'openid email profile'
     });
-  } catch (e) {
-    console.error("POST /oauth/token error:", e);
-    return res.status(500).json({ error: "server_error" });
+  } catch (error) {
+    console.error('Token error:', error);
+    res.status(400).json({
+      error: 'invalid_grant',
+      error_description: error.message
+    });
   }
 });
 //

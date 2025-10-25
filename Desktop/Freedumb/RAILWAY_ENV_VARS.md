@@ -33,7 +33,7 @@ FRONTEND_URL=https://TU-DOMINIO-FRONTEND.vercel.app
 
 ### OAuth Provider (ChatGPT Actions)
 ```
-OAUTH_CALLBACK_URL=https://TU-DOMINIO-RAILWAY.up.railway.app/oauth/callback
+OAUTH_REDIRECT_URI=https://TU-DOMINIO-RAILWAY.up.railway.app/oauth/callback
 ACTION_CLIENT_ID=chatgpt-finance-agent
 ACTION_CLIENT_SECRET=chatgpt-finance-agent-secret-key-2025
 ACTION_REDIRECT_URI=https://chat.openai.com/aip/g-oauth/callback
