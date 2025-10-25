@@ -1,316 +1,16 @@
 openapi: 3.1.0
 info:
-  title: Freedumb AI - Personal Finance Assistant
-  version: 1.0.0
-  description: |
-    Sistema de gestión financiera personal con IA integrada (GPT-4).
-    
-    **Autenticación**: La mayoría de endpoints requieren un token JWT.
-    
-    **Pasos para usar la API:**
-    1. Registrar usuario con `/auth/register` (sin autenticación)
-    2. Hacer login con `/auth/login` (sin autenticación) - obtendrás un `accessToken`
-    3. Usar el `accessToken` en el header `Authorization: Bearer {token}` para los demás endpoints
-    
-  contact:
-    name: API Support
-    email: support@freedumb.app
-
+  title: Finance Agent API
+  description: API para gestionar transacciones financieras (gastos e ingresos) con autenticación por API Key
+  version: v1.0.0
 servers:
-  - url: https://new-production-cd21.up.railway.app/api/v1
-    description: Production Server
-  - url: http://localhost:3000/api/v1
-    description: Development Server (v1)
-  - url: http://localhost:3000/api
-    description: Development Server (legacy)
-
-components:
-  securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: "JWT token obtenido del endpoint /auth/login. Formato: Bearer {token}"
-
-  schemas:
-    Error:
-      type: object
-      properties:
-        error:
-          type: string
-          example: "Bad Request"
-        message:
-          type: string
-          example: "Invalid input data"
-        timestamp:
-          type: string
-          format: date-time
-
-    User:
-      type: object
-      properties:
-        id:
-          type: string
-          example: "550e8400-e29b-41d4-a716-446655440000"
-        email:
-          type: string
-          format: email
-          example: "user@example.com"
-        name:
-          type: string
-          example: "John Doe"
-        monthlyIncome:
-          type: number
-          example: 5000.00
-        savingsGoal:
-          type: number
-          example: 1000.00
-        riskTolerance:
-          type: string
-          enum: [low, moderate, high]
-          example: "moderate"
-        filingStatus:
-          type: string
-          enum: [single, married, head_of_household]
-          example: "single"
-        currency:
-          type: string
-          default: "USD"
-          example: "USD"
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-
-    Transaction:
-      type: object
-      required:
-        - amount
-        - type
-        - date
-      properties:
-        id:
-          type: string
-          readOnly: true
-        userId:
-          type: string
-          readOnly: true
-        amount:
-          type: number
-          format: float
-          example: 50.00
-        type:
-          type: string
-          enum: [income, expense, transfer]
-          example: "expense"
-        category:
-          type: string
-          example: "Food & Dining"
-        description:
-          type: string
-          example: "Lunch at restaurant"
-        merchant:
-          type: string
-          example: "Starbucks"
-        paymentMethod:
-          type: string
-          enum: [cash, credit_card, debit_card, bank_transfer, paypal, other]
-          example: "credit_card"
-        cardName:
-          type: string
-          example: "Visa"
-        date:
-          type: string
-          format: date
-          example: "2024-10-24"
-        isTaxDeductible:
-          type: boolean
-          default: false
-        isRecurring:
-          type: boolean
-          default: false
-        notes:
-          type: string
-        aiCategorized:
-          type: boolean
-          readOnly: true
-        confidence:
-          type: number
-          readOnly: true
-        createdAt:
-          type: string
-          format: date-time
-          readOnly: true
-        updatedAt:
-          type: string
-          format: date-time
-          readOnly: true
-
-    TransactionNLP:
-      type: object
-      required:
-        - input
-      properties:
-        input:
-          type: string
-          example: "Gasté $50 en Starbucks ayer con mi Visa"
-          description: "Texto natural describiendo la transacción"
-
-    Budget:
-      type: object
-      required:
-        - name
-        - category
-        - limit
-        - period
-      properties:
-        id:
-          type: string
-          readOnly: true
-        userId:
-          type: string
-          readOnly: true
-        name:
-          type: string
-          example: "Groceries Budget"
-        category:
-          type: string
-          example: "Food & Dining"
-        limit:
-          type: number
-          example: 500.00
-        spent:
-          type: number
-          readOnly: true
-          example: 250.00
-        period:
-          type: string
-          enum: [weekly, monthly, yearly]
-          example: "monthly"
-        startDate:
-          type: string
-          format: date
-        endDate:
-          type: string
-          format: date
-        alertThreshold:
-          type: number
-          example: 80
-          description: "Porcentaje de uso que dispara alertas (0-100)"
-        isActive:
-          type: boolean
-          default: true
-
-    Investment:
-      type: object
-      required:
-        - symbol
-        - type
-        - quantity
-        - purchasePrice
-      properties:
-        id:
-          type: string
-          readOnly: true
-        userId:
-          type: string
-          readOnly: true
-        symbol:
-          type: string
-          example: "AAPL"
-        name:
-          type: string
-          example: "Apple Inc."
-        type:
-          type: string
-          enum: [stock, crypto, bond, mutual_fund, etf]
-          example: "stock"
-        quantity:
-          type: number
-          example: 10
-        purchasePrice:
-          type: number
-          example: 150.00
-        currentPrice:
-          type: number
-          example: 175.00
-        purchaseDate:
-          type: string
-          format: date
-          example: "2024-01-15"
-        totalValue:
-          type: number
-          readOnly: true
-        totalGainLoss:
-          type: number
-          readOnly: true
-        gainLossPercentage:
-          type: number
-          readOnly: true
-
-    Notification:
-      type: object
-      properties:
-        id:
-          type: string
-        type:
-          type: string
-          enum: [budget_alert, goal_reached, transaction_reminder, ai_insight]
-        title:
-          type: string
-        message:
-          type: string
-        isRead:
-          type: boolean
-        priority:
-          type: string
-          enum: [low, medium, high]
-        relatedEntity:
-          type: object
-        createdAt:
-          type: string
-          format: date-time
-
-    FinancialSummary:
-      type: object
-      properties:
-        totalBalance:
-          type: number
-        totalIncome:
-          type: number
-        totalExpenses:
-          type: number
-        netSavings:
-          type: number
-        savingsRate:
-          type: number
-        topCategories:
-          type: array
-          items:
-            type: object
-            properties:
-              category:
-                type: string
-              amount:
-                type: number
-              percentage:
-                type: number
-
+  - url: https://your-app.railway.app
 paths:
-  # ==========================================
-  # AUTHENTICATION (No requiere Bearer Token)
-  # ==========================================
-  
-  /auth/register:
+  /transactions:
     post:
-      operationId: registerUser
-      summary: Registrar nuevo usuario
-      description: Crea una nueva cuenta de usuario. No requiere autenticación.
-      tags:
-        - Authentication
-      security: []  # Sin autenticación
+      operationId: createTransaction
+      summary: Registrar nueva transacción
+      description: Crea un gasto o ingreso en el sistema
       requestBody:
         required: true
         content:
@@ -318,31 +18,33 @@ paths:
             schema:
               type: object
               required:
-                - email
-                - password
-                - name
+                - type
+                - amount
               properties:
-                email:
+                type:
                   type: string
-                  format: email
-                  example: "newuser@example.com"
-                password:
-                  type: string
-                  format: password
-                  minLength: 6
-                  example: "securepassword123"
-                name:
-                  type: string
-                  example: "John Doe"
-                monthlyIncome:
+                  enum: [gasto, ingreso]
+                  description: Tipo de transacción
+                amount:
                   type: number
-                  example: 5000
-                savingsGoal:
-                  type: number
-                  example: 1000
+                  minimum: 0
+                  description: Monto de la transacción
+                card:
+                  type: string
+                  description: Tarjeta utilizada (opcional)
+                description:
+                  type: string
+                  description: Descripción de la transacción
+                category:
+                  type: string
+                  description: Categoría (comida, transporte, salario, etc)
+                date:
+                  type: string
+                  format: date-time
+                  description: Fecha de la transacción (opcional, por defecto ahora)
       responses:
         '201':
-          description: Usuario creado exitosamente
+          description: Transacción creada exitosamente
           content:
             application/json:
               schema:
@@ -350,153 +52,35 @@ paths:
                 properties:
                   message:
                     type: string
-                  user:
-                    $ref: '#/components/schemas/User'
-        '400':
-          description: Datos inválidos o email ya existe
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /auth/login:
-    post:
-      operationId: loginUser
-      summary: Iniciar sesión
-      description: Autentica un usuario y retorna tokens JWT. No requiere autenticación previa.
-      tags:
-        - Authentication
-      security: []  # Sin autenticación
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - email
-                - password
-              properties:
-                email:
-                  type: string
-                  format: email
-                  example: "user@example.com"
-                password:
-                  type: string
-                  format: password
-                  example: "password123"
-      responses:
-        '200':
-          description: Login exitoso
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: "Login successful"
-                  accessToken:
-                    type: string
-                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                    description: "Token JWT para usar en header Authorization"
-                  refreshToken:
-                    type: string
-                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                  user:
-                    $ref: '#/components/schemas/User'
-        '401':
-          description: Credenciales inválidas
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /auth/refresh:
-    post:
-      operationId: refreshToken
-      summary: Renovar access token
-      description: Genera un nuevo access token usando el refresh token
-      tags:
-        - Authentication
-      security: []  # Sin autenticación
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - refreshToken
-              properties:
-                refreshToken:
-                  type: string
-      responses:
-        '200':
-          description: Token renovado
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  accessToken:
-                    type: string
-                  refreshToken:
-                    type: string
-
-  # ==========================================
-  # TRANSACTIONS (Requiere Bearer Token)
-  # ==========================================
-  
-  /transactions:
+                  data:
+                    $ref: '#/components/schemas/Transaction'
     get:
       operationId: getTransactions
-      summary: Listar transacciones del usuario
-      description: Obtiene todas las transacciones del usuario autenticado con filtros opcionales
-      tags:
-        - Transactions
-      security:
-        - BearerAuth: []
+      summary: Listar transacciones
+      description: Obtiene lista de transacciones con filtros opcionales
       parameters:
-        - name: startDate
-          in: query
-          schema:
-            type: string
-            format: date
-          description: "Fecha inicial (YYYY-MM-DD)"
-          example: "2024-01-01"
-        - name: endDate
-          in: query
-          schema:
-            type: string
-            format: date
-          description: "Fecha final (YYYY-MM-DD)"
-          example: "2024-12-31"
         - name: type
           in: query
+          description: Filtrar por tipo (gasto o ingreso)
+          required: false
           schema:
             type: string
-            enum: [income, expense, transfer]
-          description: "Filtrar por tipo de transacción"
+            enum: [gasto, ingreso]
         - name: category
           in: query
+          description: Filtrar por categoría
+          required: false
           schema:
             type: string
-          description: "Filtrar por categoría"
-          example: "Food & Dining"
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-            minimum: 1
         - name: limit
           in: query
+          description: Límite de resultados (máximo 500)
+          required: false
           schema:
             type: integer
-            default: 50
+            default: 500
             minimum: 1
-            maximum: 100
+            maximum: 500
       responses:
         '200':
           description: Lista de transacciones
@@ -505,191 +89,24 @@ paths:
               schema:
                 type: object
                 properties:
+                  total:
+                    type: integer
                   transactions:
                     type: array
                     items:
                       $ref: '#/components/schemas/Transaction'
-                  pagination:
-                    type: object
-                    properties:
-                      page:
-                        type: integer
-                      limit:
-                        type: integer
-                      total:
-                        type: integer
-                      pages:
-                        type: integer
-        '401':
-          description: No autenticado o token inválido
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-    post:
-      operationId: createTransaction
-      summary: Crear nueva transacción
-      description: Crea una nueva transacción para el usuario autenticado
-      tags:
-        - Transactions
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Transaction'
-            examples:
-              expense:
-                summary: Ejemplo de gasto
-                value:
-                  amount: 50.00
-                  type: "expense"
-                  category: "Food & Dining"
-                  merchant: "Starbucks"
-                  description: "Morning coffee"
-                  paymentMethod: "credit_card"
-                  cardName: "Visa"
-                  date: "2024-10-24"
-              income:
-                summary: Ejemplo de ingreso
-                value:
-                  amount: 3000.00
-                  type: "income"
-                  category: "Salary"
-                  description: "Monthly salary"
-                  date: "2024-10-01"
-      responses:
-        '201':
-          description: Transacción creada exitosamente
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Transaction'
-        '400':
-          description: Datos inválidos
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: No autenticado
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /transactions/nlp:
-    post:
-      operationId: createTransactionNLP
-      summary: Crear transacción desde lenguaje natural
-      description: |
-        Usa IA (GPT-4) para parsear texto natural y crear una transacción estructurada.
-        
-        **Ejemplos de inputs válidos:**
-        - "Gasté $50 en Starbucks ayer con mi Visa"
-        - "Recibí $3000 de salario hoy"
-        - "Compré comida en Walmart por $85.50 con efectivo"
-      tags:
-        - Transactions
-        - AI Features
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TransactionNLP'
-            example:
-              input: "Gasté $50 en Starbucks ayer con mi Visa"
-      responses:
-        '201':
-          description: Transacción creada desde NLP
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  transaction:
-                    $ref: '#/components/schemas/Transaction'
-                  parsed:
-                    type: object
-                    properties:
-                      confidence:
-                        type: number
-                      originalInput:
-                        type: string
-        '400':
-          description: No se pudo parsear el input
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
   /transactions/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la transacción
-        example: "550e8400-e29b-41d4-a716-446655440000"
-
-    get:
-      operationId: getTransactionById
-      summary: Obtener transacción por ID
-      tags:
-        - Transactions
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Detalles de la transacción
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Transaction'
-        '404':
-          description: Transacción no encontrada
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-    put:
-      operationId: updateTransaction
-      summary: Actualizar transacción
-      tags:
-        - Transactions
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Transaction'
-      responses:
-        '200':
-          description: Transacción actualizada
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Transaction'
-        '404':
-          description: Transacción no encontrada
-
     delete:
       operationId: deleteTransaction
       summary: Eliminar transacción
-      tags:
-        - Transactions
-      security:
-        - BearerAuth: []
+      description: Elimina una transacción por ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID de la transacción
+          schema:
+            type: string
       responses:
         '200':
           description: Transacción eliminada
@@ -700,578 +117,57 @@ paths:
                 properties:
                   message:
                     type: string
-                    example: "Transaction deleted successfully"
-        '404':
-          description: Transacción no encontrada
-
-  # ==========================================
-  # AI FEATURES (Requiere Bearer Token)
-  # ==========================================
-  
-  /ai/categorize:
-    post:
-      operationId: categorizeTransaction
-      summary: Categorizar transacción con IA
-      description: Usa GPT-4 para categorizar automáticamente una transacción
-      tags:
-        - AI Features
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - description
-                - amount
-              properties:
-                description:
-                  type: string
-                  example: "Compra en supermercado"
-                amount:
-                  type: number
-                  example: 85.50
-                merchant:
-                  type: string
-                  example: "Walmart"
-      responses:
-        '200':
-          description: Categoría sugerida por IA
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  category:
-                    type: string
-                    example: "Food & Dining"
-                  subCategory:
-                    type: string
-                    example: "Groceries"
-                  confidence:
-                    type: number
-                    example: 0.92
-                  isTaxDeductible:
-                    type: boolean
-                    example: false
-                  reasoning:
-                    type: string
-                    example: "Compra típica de supermercado para alimentos"
-
-  /ai/chat:
-    post:
-      operationId: chatWithAI
-      summary: Chat con asistente financiero IA
-      description: Conversa con un asistente financiero basado en GPT-4
-      tags:
-        - AI Features
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - message
-              properties:
-                message:
-                  type: string
-                  example: "¿Cómo puedo ahorrar más dinero?"
-                context:
-                  type: array
-                  description: "Historial de conversación previo"
-                  items:
-                    type: object
-                    properties:
-                      role:
-                        type: string
-                        enum: [user, assistant]
-                      content:
-                        type: string
-      responses:
-        '200':
-          description: Respuesta del asistente
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  response:
-                    type: string
-                  suggestions:
-                    type: array
-                    items:
-                      type: string
-
-  /ai/insights:
+                  data:
+                    $ref: '#/components/schemas/Transaction'
+  /summary:
     get:
-      operationId: getAIInsights
-      summary: Obtener insights financieros con IA
-      description: Genera insights personalizados sobre hábitos financieros usando IA
-      tags:
-        - AI Features
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Insights generados
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  insights:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        type:
-                          type: string
-                        title:
-                          type: string
-                        description:
-                          type: string
-                        priority:
-                          type: string
-                        actionable:
-                          type: boolean
-
-  # ==========================================
-  # BUDGETS (Requiere Bearer Token)
-  # ==========================================
-  
-  /budgets:
-    get:
-      operationId: getBudgets
-      summary: Listar presupuestos
-      description: Obtiene todos los presupuestos del usuario autenticado
-      tags:
-        - Budgets
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Lista de presupuestos
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Budget'
-
-    post:
-      operationId: createBudget
-      summary: Crear nuevo presupuesto
-      tags:
-        - Budgets
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Budget'
-            example:
-              name: "Groceries Budget"
-              category: "Food & Dining"
-              limit: 500.00
-              period: "monthly"
-              alertThreshold: 80
-      responses:
-        '201':
-          description: Presupuesto creado
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Budget'
-
-  /budgets/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-
-    get:
-      operationId: getBudgetById
-      summary: Obtener presupuesto por ID
-      tags:
-        - Budgets
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Detalles del presupuesto
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Budget'
-
-    put:
-      operationId: updateBudget
-      summary: Actualizar presupuesto
-      tags:
-        - Budgets
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Budget'
-      responses:
-        '200':
-          description: Presupuesto actualizado
-
-    delete:
-      operationId: deleteBudget
-      summary: Eliminar presupuesto
-      tags:
-        - Budgets
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Presupuesto eliminado
-
-  # ==========================================
-  # INVESTMENTS (Requiere Bearer Token)
-  # ==========================================
-  
-  /investments:
-    get:
-      operationId: getInvestments
-      summary: Obtener portafolio de inversiones
-      tags:
-        - Investments
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Lista de inversiones
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  investments:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Investment'
-                  summary:
-                    type: object
-                    properties:
-                      totalValue:
-                        type: number
-                      totalGainLoss:
-                        type: number
-                      totalGainLossPercentage:
-                        type: number
-
-    post:
-      operationId: createInvestment
-      summary: Agregar nueva inversión
-      tags:
-        - Investments
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Investment'
-      responses:
-        '201':
-          description: Inversión creada
-
-  /investments/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-
-    get:
-      operationId: getInvestmentById
-      summary: Obtener inversión por ID
-      tags:
-        - Investments
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Detalles de la inversión
-
-    put:
-      operationId: updateInvestment
-      summary: Actualizar inversión
-      tags:
-        - Investments
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Investment'
-      responses:
-        '200':
-          description: Inversión actualizada
-
-    delete:
-      operationId: deleteInvestment
-      summary: Eliminar inversión
-      tags:
-        - Investments
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Inversión eliminada
-
-  # ==========================================
-  # ANALYTICS (Requiere Bearer Token)
-  # ==========================================
-  
-  /analytics/summary:
-    get:
-      operationId: getFinancialSummary
+      operationId: getSummary
       summary: Obtener resumen financiero
-      description: Resumen general de finanzas del usuario
-      tags:
-        - Analytics
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: period
-          in: query
-          schema:
-            type: string
-            enum: [week, month, quarter, year]
-            default: month
+      description: Calcula totales de gastos, ingresos y balance
       responses:
         '200':
           description: Resumen financiero
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FinancialSummary'
-
-  /analytics/cashflow:
-    get:
-      operationId: getCashflowAnalysis
-      summary: Análisis de flujo de caja
-      description: Análisis detallado del flujo de caja por periodo
-      tags:
-        - Analytics
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: startDate
-          in: query
-          schema:
-            type: string
-            format: date
-        - name: endDate
-          in: query
-          schema:
-            type: string
-            format: date
-        - name: groupBy
-          in: query
-          schema:
-            type: string
-            enum: [day, week, month]
-            default: month
-      responses:
-        '200':
-          description: Análisis de flujo de caja
-
-  /analytics/predictions:
-    get:
-      operationId: getPredictions
-      summary: Predicciones financieras con IA
-      description: Predicciones de flujo de caja futuro usando machine learning
-      tags:
-        - Analytics
-        - AI Features
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: months
-          in: query
-          schema:
-            type: integer
-            default: 3
-            minimum: 1
-            maximum: 12
-          description: "Número de meses a predecir (1-12)"
-      responses:
-        '200':
-          description: Predicciones generadas
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  predictions:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        month:
-                          type: string
-                        predictedIncome:
-                          type: number
-                        predictedExpenses:
-                          type: number
-                        predictedSavings:
-                          type: number
-                        confidence:
-                          type: number
-
-  # ==========================================
-  # USER PROFILE (Requiere Bearer Token)
-  # ==========================================
-  
-  /users/profile:
-    get:
-      operationId: getUserProfile
-      summary: Obtener perfil de usuario
-      tags:
-        - User
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Perfil del usuario
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-
-    put:
-      operationId: updateUserProfile
-      summary: Actualizar perfil de usuario
-      tags:
-        - User
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                monthlyIncome:
-                  type: number
-                savingsGoal:
-                  type: number
-                riskTolerance:
-                  type: string
-                  enum: [low, moderate, high]
-                filingStatus:
-                  type: string
-                  enum: [single, married, head_of_household]
-      responses:
-        '200':
-          description: Perfil actualizado
-
-  # ==========================================
-  # NOTIFICATIONS (Requiere Bearer Token)
-  # ==========================================
-  
-  /notifications:
-    get:
-      operationId: getNotifications
-      summary: Listar notificaciones
-      tags:
-        - Notifications
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: isRead
-          in: query
-          schema:
-            type: boolean
-        - name: type
-          in: query
-          schema:
-            type: string
-            enum: [budget_alert, goal_reached, transaction_reminder, ai_insight]
-      responses:
-        '200':
-          description: Lista de notificaciones
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Notification'
-
-  /notifications/{id}/read:
-    put:
-      operationId: markNotificationAsRead
-      summary: Marcar notificación como leída
-      tags:
-        - Notifications
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Notificación marcada como leída
-
-  /notifications/{id}:
-    delete:
-      operationId: deleteNotification
-      summary: Eliminar notificación
-      tags:
-        - Notifications
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Notificación eliminada
-
-tags:
-  - name: Authentication
-    description: Endpoints de registro y autenticación (sin JWT)
-  - name: Transactions
-    description: Gestión de transacciones financieras
-  - name: AI Features
-    description: Funcionalidades con inteligencia artificial (GPT-4)
-  - name: Budgets
-    description: Gestión de presupuestos
-  - name: Investments
-    description: Portafolio de inversiones
-  - name: Analytics
-    description: Reportes y análisis financieros
-  - name: User
-    description: Gestión de perfil de usuario
-  - name: Notifications
-    description: Sistema de notificaciones
+                $ref: '#/components/schemas/Summary'
+components:
+  schemas:
+    Transaction:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: ID único de la transacción
+        type:
+          type: string
+          enum: [gasto, ingreso]
+          description: Tipo de transacción
+        amount:
+          type: number
+          description: Monto de la transacción
+        card:
+          type: string
+          description: Tarjeta utilizada
+        description:
+          type: string
+          description: Descripción
+        category:
+          type: string
+          description: Categoría
+        date:
+          type: string
+          format: date-time
+          description: Fecha de la transacción
+    Summary:
+      type: object
+      properties:
+        totalGastos:
+          type: number
+          description: Total de gastos
+        totalIngresos:
+          type: number
+          description: Total de ingresos
+        balance:
+          type: number
+          description: Balance (ingresos - gastos)
