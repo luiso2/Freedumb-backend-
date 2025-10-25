@@ -39,19 +39,56 @@ async function authenticateToken(req, res, next) {
       }
 
       try {
-        const user = await User.findOne({ 
-          $or: [
-            { _id: decoded.userId },
-            { email: decoded.email }
-          ]
-        });
+        // 🔧 Log para debug - ver qué contiene el token
+        console.log('🔍 Token decoded:', JSON.stringify(decoded, null, 2));
+
+        // 🔧 Buscar usuario por múltiples campos posibles
+        let user = null;
+
+        // Intentar buscar por diferentes campos del JWT
+        if (decoded.userId) {
+          console.log('🔍 Buscando por userId:', decoded.userId);
+          user = await User.findById(decoded.userId);
+        }
+
+        if (!user && decoded.user_id) {
+          console.log('🔍 Buscando por user_id:', decoded.user_id);
+          user = await User.findById(decoded.user_id);
+        }
+
+        if (!user && decoded.id) {
+          console.log('🔍 Buscando por id:', decoded.id);
+          user = await User.findById(decoded.id);
+        }
+
+        if (!user && decoded.email) {
+          console.log('🔍 Buscando por email:', decoded.email);
+          user = await User.findOne({ email: decoded.email });
+        }
+
+        if (!user && decoded.sub) {
+          console.log('🔍 Buscando por sub:', decoded.sub);
+          // 'sub' es el estándar JWT para user ID
+          user = await User.findOne({
+            $or: [
+              { googleId: decoded.sub }
+            ]
+          });
+        }
+
+        // 🔧 Si aún no encontramos usuario, buscar por el campo user.sub
+        if (!user && decoded.user && decoded.user.sub) {
+          console.log('🔍 Buscando por user.sub:', decoded.user.sub);
+          user = await User.findOne({ googleId: decoded.user.sub });
+        }
 
         if (!user) {
-          console.log('❌ User not found:', decoded.email || decoded.userId);
+          console.log('❌ User not found. Token payload:', JSON.stringify(decoded, null, 2));
           return res.status(404).json({
             success: false,
             error: 'User not found',
-            code: 'USER_NOT_FOUND'
+            code: 'USER_NOT_FOUND',
+            debug: process.env.NODE_ENV !== 'production' ? decoded : undefined
           });
         }
 
