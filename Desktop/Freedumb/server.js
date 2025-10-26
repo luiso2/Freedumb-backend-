@@ -9,7 +9,7 @@ dotenv.config();
 
 // Importar rutas y modelos
 const transactionRoutes = require('./routes/transactions');
-const { User, initializeDefaultCategories } = require('./models');
+const { User, Session, initializeDefaultCategories } = require('./models');
 
 const app = express();
 app.use(cors());
@@ -245,7 +245,23 @@ authRouter.post("/oauth/token", express.urlencoded({ extended: true }), async (r
       { expiresIn: '7d' }
     );
 
-    console.log(`OAuth token generated for user: ${profile.email}`);
+    // Crear sesión en la base de datos para tracking
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 horas
+    await Session.create({
+      userId: user._id,
+      token: accessToken,
+      deviceInfo: {
+        userAgent: req.headers['user-agent'] || 'Unknown',
+        ip: req.ip || req.connection.remoteAddress,
+        platform: 'ChatGPT'
+      },
+      expiresAt,
+      isActive: true,
+      lastActivity: new Date()
+    });
+
+    console.log(`✅ OAuth token generated for user: ${profile.email}`);
+    console.log(`📊 Active sessions for user: ${await Session.countDocuments({ userId: user._id, isActive: true })}`);
 
     res.json({
       access_token: accessToken,

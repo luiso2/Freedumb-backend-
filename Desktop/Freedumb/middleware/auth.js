@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { User } = require('../models');
+const { User, Session } = require('../models');
 
 /**
  * Middleware para validar JWT token
@@ -103,7 +103,13 @@ async function authenticateToken(req, res, next) {
 
         req.user = user;
         req.userId = user._id.toString();
-        
+
+        // Actualizar última actividad de la sesión (sin await para no bloquear)
+        Session.findOneAndUpdate(
+          { token: token, userId: user._id, isActive: true },
+          { lastActivity: new Date() }
+        ).catch(err => console.log('⚠️  Error updating session activity:', err.message));
+
         console.log('✅ Authenticated user:', user.email);
         next();
 
