@@ -280,6 +280,158 @@ authRouter.post("/oauth/token", express.urlencoded({ extended: true }), async (r
   }
 });
 
+// 3) ChatGPT → /auth/logout (invalidar sesión actual)
+authRouter.post("/logout", async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+      return res.status(400).json({
+        error: 'invalid_request',
+        error_description: 'Token is required'
+      });
+    }
+
+    // Invalidar la sesión actual
+    const result = await Session.findOneAndUpdate(
+      { token: token, isActive: true },
+      { isActive: false },
+      { new: true }
+    );
+
+    if (!result) {
+      return res.status(404).json({
+        error: 'session_not_found',
+        error_description: 'Session not found or already invalidated'
+      });
+    }
+
+    console.log(`✅ Session invalidated for user: ${result.userId}`);
+
+    res.json({
+      success: true,
+      message: 'Session invalidated successfully'
+    });
+
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({
+      error: 'server_error',
+      error_description: 'Internal server error'
+    });
+  }
+});
+
+// 4) ChatGPT → /auth/refresh (renovar access token)
+authRouter.post("/refresh", async (req, res) => {
+  try {
+    const { refresh_token } = req.body;
+
+    if (!refresh_token) {
+      return res.status(400).json({
+        error: 'invalid_request',
+        error_description: 'refresh_token is required'
+      });
+    }
+
+    // Verificar el refresh token
+    jwt.verify(refresh_token, JWT_SECRET, async (err, decoded) => {
+      if (err) {
+        console.log('❌ Invalid refresh token:', err.message);
+        return res.status(403).json({
+          error: 'invalid_grant',
+          error_description: 'Invalid or expired refresh token'
+        });
+      }
+
+      try {
+        // Buscar usuario
+        const user = await User.findById(decoded.userId);
+
+        if (!user) {
+          return res.status(404).json({
+            error: 'user_not_found',
+            error_description: 'User not found'
+          });
+        }
+
+        if (!user.isActive) {
+          return res.status(403).json({
+            error: 'user_inactive',
+            error_description: 'User account is inactive'
+          });
+        }
+
+        // Generar nuevo access token
+        const newAccessToken = jwt.sign(
+          {
+            userId: user._id.toString(),
+            email: user.email,
+            user: decoded.user,
+            iss: 'freedumb-finance',
+            aud: 'chatgpt-actions'
+          },
+          JWT_SECRET,
+          { expiresIn: '24h' }
+        );
+
+        // Generar nuevo refresh token (opcional, para rotación)
+        const newRefreshToken = jwt.sign(
+          {
+            userId: user._id.toString(),
+            email: user.email,
+            user: decoded.user,
+            iss: 'freedumb-finance',
+            aud: 'chatgpt-actions'
+          },
+          JWT_SECRET,
+          { expiresIn: '7d' }
+        );
+
+        // Crear nueva sesión
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        await Session.create({
+          userId: user._id,
+          token: newAccessToken,
+          deviceInfo: {
+            userAgent: req.headers['user-agent'] || 'Unknown',
+            ip: req.ip || req.connection.remoteAddress,
+            platform: 'ChatGPT-Refresh'
+          },
+          expiresAt,
+          isActive: true,
+          lastActivity: new Date()
+        });
+
+        console.log(`✅ Token refreshed for user: ${user.email}`);
+
+        res.json({
+          access_token: newAccessToken,
+          token_type: 'Bearer',
+          expires_in: 86400,
+          refresh_token: newRefreshToken,
+          scope: 'openid email profile'
+        });
+
+      } catch (dbError) {
+        console.error('Database error during refresh:', dbError);
+        return res.status(500).json({
+          error: 'server_error',
+          error_description: 'Internal server error'
+        });
+      }
+    });
+
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    res.status(500).json({
+      error: 'server_error',
+      error_description: 'Internal server error'
+    });
+  }
+});
+
 // Mount auth router at /auth
 app.use("/auth", authRouter);
 
