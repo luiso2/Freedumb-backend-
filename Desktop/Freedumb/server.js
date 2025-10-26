@@ -230,7 +230,7 @@ authRouter.post("/oauth/token", express.urlencoded({ extended: true }), async (r
         aud: 'chatgpt-actions'
       },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '90d' }
     );
 
     const refreshToken = jwt.sign(
@@ -246,7 +246,7 @@ authRouter.post("/oauth/token", express.urlencoded({ extended: true }), async (r
     );
 
     // Crear sesión en la base de datos para tracking
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 horas
+    const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 días
     await Session.create({
       userId: user._id,
       token: accessToken,
@@ -266,7 +266,7 @@ authRouter.post("/oauth/token", express.urlencoded({ extended: true }), async (r
     res.json({
       access_token: accessToken,
       token_type: 'Bearer',
-      expires_in: 86400, // 24 horas en segundos
+      expires_in: 7776000, // 90 días en segundos
       refresh_token: refreshToken,
       scope: 'openid email profile'
     });
@@ -373,7 +373,7 @@ authRouter.post("/refresh", async (req, res) => {
             aud: 'chatgpt-actions'
           },
           JWT_SECRET,
-          { expiresIn: '24h' }
+          { expiresIn: '90d' }
         );
 
         // Generar nuevo refresh token (opcional, para rotación)
@@ -390,7 +390,7 @@ authRouter.post("/refresh", async (req, res) => {
         );
 
         // Crear nueva sesión
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 días
         await Session.create({
           userId: user._id,
           token: newAccessToken,
@@ -409,7 +409,7 @@ authRouter.post("/refresh", async (req, res) => {
         res.json({
           access_token: newAccessToken,
           token_type: 'Bearer',
-          expires_in: 86400,
+          expires_in: 7776000, // 90 días en segundos
           refresh_token: newRefreshToken,
           scope: 'openid email profile'
         });
@@ -439,6 +439,41 @@ app.use("/auth", authRouter);
 // Montar rutas de transacciones con prefijo /api
 const API_PREFIX = process.env.API_PREFIX || '/api';
 app.use(API_PREFIX, transactionRoutes);
+
+// ================== AUTO-LOGOUT POR INACTIVIDAD ==================
+/**
+ * Función que cierra sesiones inactivas por más de 30 días
+ * Se ejecuta cada hora automáticamente
+ */
+async function cleanupInactiveSessions() {
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const result = await Session.updateMany(
+      {
+        isActive: true,
+        lastActivity: { $lt: thirtyDaysAgo }
+      },
+      {
+        $set: { isActive: false }
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      console.log(`🧹 Closed ${result.modifiedCount} inactive session(s) (30+ days without activity)`);
+    }
+  } catch (error) {
+    console.error('❌ Error cleaning up inactive sessions:', error);
+  }
+}
+
+// Ejecutar limpieza al iniciar el servidor
+cleanupInactiveSessions();
+
+// Ejecutar limpieza cada hora (3600000 ms)
+setInterval(cleanupInactiveSessions, 3600000);
+
+console.log('✅ Auto-logout scheduler started (checking every hour)');
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server on :${PORT}`));
