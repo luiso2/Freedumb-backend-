@@ -230,7 +230,7 @@ authRouter.post("/oauth/token", express.urlencoded({ extended: true }), async (r
         aud: 'chatgpt-actions'
       },
       JWT_SECRET,
-      { expiresIn: '1h' }
+      { expiresIn: '24h' }
     );
 
     const refreshToken = jwt.sign(
@@ -250,7 +250,7 @@ authRouter.post("/oauth/token", express.urlencoded({ extended: true }), async (r
     res.json({
       access_token: accessToken,
       token_type: 'Bearer',
-      expires_in: 3600,
+      expires_in: 86400, // 24 horas en segundos
       refresh_token: refreshToken,
       scope: 'openid email profile'
     });
