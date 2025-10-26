@@ -71,6 +71,9 @@ const categorySchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Índice único compuesto para prevenir duplicados
+categorySchema.index({ name: 1, type: 1 }, { unique: true });
+
 const Category = mongoose.model('Category', categorySchema);
 
 // ============================================
@@ -151,6 +154,49 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 
 // ============================================
+// MODELO DE SESIÓN (Para tracking de sesiones activas)
+// ============================================
+const sessionSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true
+  },
+  token: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  deviceInfo: {
+    userAgent: String,
+    ip: String,
+    platform: String
+  },
+  expiresAt: {
+    type: Date,
+    required: true,
+    index: true
+  },
+  isActive: {
+    type: Boolean,
+    default: true
+  },
+  lastActivity: {
+    type: Date,
+    default: Date.now
+  }
+}, {
+  timestamps: true
+});
+
+// Índice compuesto para búsquedas eficientes
+sessionSchema.index({ userId: 1, isActive: 1 });
+sessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // Auto-delete expired sessions
+
+const Session = mongoose.model('Session', sessionSchema);
+
+// ============================================
 // INICIALIZAR CATEGORÍAS POR DEFECTO
 // ============================================
 async function initializeDefaultCategories() {
@@ -191,5 +237,6 @@ module.exports = {
   Category,
   Account,
   User,
+  Session,
   initializeDefaultCategories
 };
